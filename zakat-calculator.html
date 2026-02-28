@@ -589,6 +589,7 @@ input[type="date"]{color-scheme:dark;}
 
   <!-- ═══ CALC TAB ═══ -->
   <div id="tab-calc">
+    <div id="msg-nisab-global" class="nmsg" style="display:none;margin-bottom:18px"></div>
     <!-- Money -->
     <div class="scard" id="card-money">
       <div class="scard-header">
@@ -958,41 +959,53 @@ function renderFunds(){
   }).join('');
 }
 
-// ── MAIN CALC ──────────────────────────────────────────────
+// ── MAIN CALC (combined Nisab: all wealth accumulates) ─────
 function calc(){
   const nisab=(v('goldRefPrice')||v('gPrice'))*85;
+  if(nisab<=0){ setBadge('bdg-money',0); setBadge('bdg-gold',0); setBadge('bdg-silver',0); setBadge('bdg-stocks',0); setBadge('bdg-funds',0); setBadge('bdg-liab',v('lShort')+v('lInst')+v('lBiz'),'liab'); $('grandTotal').textContent='0.00'; showMsg('msg-money',false); showMsg('msg-gold',false); showMsg('msg-silver',false); showMsg('msg-nisab-global',false); renderGold(); updateMasaref(); return; }
+
   const moneyVal=v('cash')+v('bank'),hawl=$('moneyHawl')?.value==='yes';
   const moneyBase=hawl?moneyVal:0;
-  const moneyZ=moneyBase>=nisab?moneyBase*0.025:0;
-  setBadge('bdg-money',moneyZ);
-  if($('card-money').style.display!=='none'&&moneyVal>0)
-    showMsg('msg-money',true,moneyBase>=nisab?`✅ بلغ النصاب (${fmt(nisab)} ج.م) — الزكاة واجبة`:`❌ لم يبلغ النصاب — يلزم ${fmt(nisab)} ج.م`);
-  else showMsg('msg-money',false);
-
   const totalPure=goldArr.reduce((s,g)=>s+g.pure,0);
   const gHawl=$('goldHawl')?.value==='yes';
   const goldVal=totalPure*v('gPrice');
-  const goldZ=(gHawl&&totalPure>=85)?goldVal*0.025:0;
-  setBadge('bdg-gold',goldZ);renderGold();
-  if($('card-gold').style.display!=='none'&&goldArr.length>0)
-    showMsg('msg-gold',true,totalPure>=85?`✅ بلغ نصاب الذهب — لديك ${totalPure.toFixed(2)} جم خالص`:`❌ لم يبلغ نصاب الذهب — لديك ${totalPure.toFixed(2)} من أصل 85 جم`);
-  else showMsg('msg-gold',false);
-
   const sW=v('sW'),sP=v('sP'),sHawl=$('silverHawl')?.value==='yes';
-  const silverZ=(sHawl&&sW>=595)?sW*sP*0.025:0;
-  setBadge('bdg-silver',silverZ);
-  if($('card-silver').style.display!=='none'&&sW>0)
-    showMsg('msg-silver',true,sW>=595?`✅ بلغ نصاب الفضة (595 جم) — لديك ${sW} جم`:`❌ لم يبلغ نصاب الفضة — لديك ${sW} من أصل 595 جم`);
-  else showMsg('msg-silver',false);
-
-  const stockZ=stockArr.reduce((s,st)=>s+st.qty*st.price*0.025,0);
-  setBadge('bdg-stocks',stockZ);
-  const fundZ=fundArr.reduce((s,f)=>s+f.units*f.price*0.025,0);
-  setBadge('bdg-funds',fundZ);
+  const silverVal=sHawl?sW*sP:0;
+  const stockTotal=stockArr.reduce((s,st)=>s+st.qty*st.price,0);
+  const fundTotal=fundArr.reduce((s,f)=>s+f.units*f.price,0);
   const liab=v('lShort')+v('lInst')+v('lBiz');
+
+  const totalAssets=moneyBase+(gHawl?goldVal:0)+silverVal+stockTotal+fundTotal;
+  const netWealth=Math.max(0,totalAssets-liab);
+  const reachedNisab=netWealth>=nisab;
+
+  const moneyZ=reachedNisab?moneyBase*0.025:0;
+  const goldZ=reachedNisab&&gHawl?goldVal*0.025:0;
+  const silverZ=reachedNisab&&sHawl?(sW*sP)*0.025:0;
+  const stockZ=reachedNisab?stockTotal*0.025:0;
+  const fundZ=reachedNisab?fundTotal*0.025:0;
+
+  setBadge('bdg-money',moneyZ);
+  setBadge('bdg-gold',goldZ);renderGold();
+  setBadge('bdg-silver',silverZ);
+  setBadge('bdg-stocks',stockZ);
+  setBadge('bdg-funds',fundZ);
   setBadge('bdg-liab',liab,'liab');
 
-  grandZakat=Math.max(0,moneyZ+goldZ+silverZ+stockZ+fundZ-liab*0.025);
+  showMsg('msg-money',false);
+  showMsg('msg-gold',false);
+  showMsg('msg-silver',false);
+
+  if(totalAssets>0||liab>0){
+    const gMsg=$('msg-nisab-global');
+    gMsg.style.display='flex';
+    gMsg.textContent=reachedNisab
+      ?`✅ بلغ النصاب الإجمالي (${fmt(netWealth)} ج.م ≥ ${fmt(nisab)} ج.م) — الزكاة واجبة على إجمالي المال`
+      :`❌ لم يبلغ النصاب الإجمالي — إجمالي المال بعد الخصوم ${fmt(netWealth)} ج.م، يلزم ${fmt(nisab)} ج.م`;
+    gMsg.className='nmsg '+(reachedNisab?'ok':'bad');
+  } else showMsg('msg-nisab-global',false);
+
+  grandZakat=reachedNisab?Math.max(0,(totalAssets-liab)*0.025):0;
   $('grandTotal').textContent=fmt(grandZakat);
   updateMasaref();
 }
