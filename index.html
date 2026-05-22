@@ -10,7 +10,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <style>
 :root {
   --gold:        #C9A84C;
@@ -577,6 +576,15 @@ input[type="date"]{color-scheme:dark;}
     <p><strong>شروط النصاب والحول:</strong> النقد والأرصدة 2.5% عند بلوغ النصاب (قيمة 85 جم ذهب) ومرور حول. الذهب 85 جم خالص، الفضة 595 جم. للتفاصيل اضغط هنا.</p>
   </div>
 
+  <div class="scard" style="margin-bottom:22px">
+    <div class="scard-body" style="padding:14px 20px">
+      <div class="field">
+        <label>اسم دافع الزكاة (اختياري — يظهر في التقرير)</label>
+        <input type="text" id="payerName" placeholder="الاسم الكامل">
+      </div>
+    </div>
+  </div>
+
   <div class="cat-label">اختر أنواع الأموال التي تملكها:</div>
   <div class="chips">
     <div class="chip active" onclick="toggleCat('money',this)">💵 نقد وأرصدة</div>
@@ -820,11 +828,11 @@ input[type="date"]{color-scheme:dark;}
     <div class="exp-btns">
       <button class="btn btn-xl" onclick="exportExcel()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 3v18M2 9h20"/></svg>
-        Excel
+        تقرير Excel
       </button>
       <button class="btn btn-pdf" onclick="exportPDF()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        PDF
+        تقرير PDF
       </button>
     </div>
   </div>
@@ -854,7 +862,7 @@ input[type="date"]{color-scheme:dark;}
 // CALC TAB — DATA & HELPERS
 // ═══════════════════════════════════════════════════════════
 const goldArr=[],stockArr=[],fundArr=[];
-let grandZakat=0,pie=null;
+let grandZakat=0,pie=null,STATE=null;
 
 const MASAREF=[
   {name:"الفقراء",        def:"الذين لا يجدون ما يكفيهم",        icon:"🤲", pct:12.5, entries:[]},
@@ -872,6 +880,11 @@ const $=id=>document.getElementById(id);
 const v=id=>parseFloat($(id)?.value)||0;
 const fmt=n=>n.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2});
 const today=()=>new Date().toISOString().split('T')[0];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function reportRef(){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `ZK-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${Math.floor(1000+Math.random()*9000)}`;
+}
 
 function setBadge(id,amt,type='zakat'){
   const el=$(id);if(!el)return;
@@ -960,53 +973,62 @@ function renderFunds(){
 }
 
 // ── MAIN CALC (combined Nisab: all wealth accumulates) ─────
-function calc(){
-  const nisab=(v('goldRefPrice')||v('gPrice'))*85;
-  if(nisab<=0){ setBadge('bdg-money',0); setBadge('bdg-gold',0); setBadge('bdg-silver',0); setBadge('bdg-stocks',0); setBadge('bdg-funds',0); setBadge('bdg-liab',v('lShort')+v('lInst')+v('lBiz'),'liab'); $('grandTotal').textContent='0.00'; showMsg('msg-money',false); showMsg('msg-gold',false); showMsg('msg-silver',false); showMsg('msg-nisab-global',false); renderGold(); updateMasaref(); return; }
-
-  const moneyVal=v('cash')+v('bank'),hawl=$('moneyHawl')?.value==='yes';
-  const moneyBase=hawl?moneyVal:0;
+function computeState(){
+  const refPrice=v('goldRefPrice')||v('gPrice');
+  const nisab=refPrice*85;
+  const cash=v('cash'),bank=v('bank'),moneyVal=cash+bank;
+  const moneyHawl=$('moneyHawl')?.value==='yes';
+  const moneyBase=moneyHawl?moneyVal:0;
+  const gP=v('gPrice');
   const totalPure=goldArr.reduce((s,g)=>s+g.pure,0);
   const gHawl=$('goldHawl')?.value==='yes';
-  const goldVal=totalPure*v('gPrice');
+  const goldVal=totalPure*gP;
   const sW=v('sW'),sP=v('sP'),sHawl=$('silverHawl')?.value==='yes';
-  const silverVal=sHawl?sW*sP:0;
+  const silverVal=sW*sP;
   const stockTotal=stockArr.reduce((s,st)=>s+st.qty*st.price,0);
   const fundTotal=fundArr.reduce((s,f)=>s+f.units*f.price,0);
-  const liab=v('lShort')+v('lInst')+v('lBiz');
-
-  const totalAssets=moneyBase+(gHawl?goldVal:0)+silverVal+stockTotal+fundTotal;
+  const liabShort=v('lShort'),liabInst=v('lInst'),liabBiz=v('lBiz');
+  const liab=liabShort+liabInst+liabBiz;
+  const totalAssets=moneyBase+(gHawl?goldVal:0)+(sHawl?silverVal:0)+stockTotal+fundTotal;
   const netWealth=Math.max(0,totalAssets-liab);
-  const reachedNisab=netWealth>=nisab;
+  const reachedNisab=nisab>0&&netWealth>=nisab;
+  const grandZakat=reachedNisab?netWealth*0.025:0;
+  return{refPrice,nisab,cash,bank,moneyVal,moneyHawl,moneyBase,gP,totalPure,
+    goldVal,gHawl,sW,sP,silverVal,sHawl,stockTotal,fundTotal,
+    liabShort,liabInst,liabBiz,liab,totalAssets,netWealth,reachedNisab,grandZakat,
+    moneyZ:reachedNisab?moneyBase*0.025:0,
+    goldZ:reachedNisab&&gHawl?goldVal*0.025:0,
+    silverZ:reachedNisab&&sHawl?silverVal*0.025:0,
+    stockZ:reachedNisab?stockTotal*0.025:0,
+    fundZ:reachedNisab?fundTotal*0.025:0};
+}
 
-  const moneyZ=reachedNisab?moneyBase*0.025:0;
-  const goldZ=reachedNisab&&gHawl?goldVal*0.025:0;
-  const silverZ=reachedNisab&&sHawl?(sW*sP)*0.025:0;
-  const stockZ=reachedNisab?stockTotal*0.025:0;
-  const fundZ=reachedNisab?fundTotal*0.025:0;
+function calc(){
+  STATE=computeState();
+  const s=STATE;
+  grandZakat=s.grandZakat;
+  $('grandTotal').textContent=fmt(grandZakat);
 
-  setBadge('bdg-money',moneyZ);
-  setBadge('bdg-gold',goldZ);renderGold();
-  setBadge('bdg-silver',silverZ);
-  setBadge('bdg-stocks',stockZ);
-  setBadge('bdg-funds',fundZ);
-  setBadge('bdg-liab',liab,'liab');
+  setBadge('bdg-money',s.moneyZ);
+  setBadge('bdg-gold',s.goldZ);renderGold();
+  setBadge('bdg-silver',s.silverZ);
+  setBadge('bdg-stocks',s.stockZ);
+  setBadge('bdg-funds',s.fundZ);
+  setBadge('bdg-liab',s.liab,'liab');
 
   showMsg('msg-money',false);
   showMsg('msg-gold',false);
   showMsg('msg-silver',false);
 
-  if(totalAssets>0||liab>0){
+  if(s.nisab>0&&(s.totalAssets>0||s.liab>0)){
     const gMsg=$('msg-nisab-global');
     gMsg.style.display='flex';
-    gMsg.textContent=reachedNisab
-      ?`✅ بلغ النصاب الإجمالي (${fmt(netWealth)} ج.م ≥ ${fmt(nisab)} ج.م) — الزكاة واجبة على إجمالي المال`
-      :`❌ لم يبلغ النصاب الإجمالي — إجمالي المال بعد الخصوم ${fmt(netWealth)} ج.م، يلزم ${fmt(nisab)} ج.م`;
-    gMsg.className='nmsg '+(reachedNisab?'ok':'bad');
+    gMsg.textContent=s.reachedNisab
+      ?`✅ بلغ النصاب الإجمالي (${fmt(s.netWealth)} ج.م ≥ ${fmt(s.nisab)} ج.م) — الزكاة واجبة على إجمالي المال`
+      :`❌ لم يبلغ النصاب الإجمالي — إجمالي المال بعد الخصوم ${fmt(s.netWealth)} ج.م، يلزم ${fmt(s.nisab)} ج.م`;
+    gMsg.className='nmsg '+(s.reachedNisab?'ok':'bad');
   } else showMsg('msg-nisab-global',false);
 
-  grandZakat=reachedNisab?Math.max(0,(totalAssets-liab)*0.025):0;
-  $('grandTotal').textContent=fmt(grandZakat);
   updateMasaref();
 }
 
@@ -1307,148 +1329,351 @@ function switchTab(tab,btn){
   if(tab==='masaref'){renderMasrafCards();updateMasaref();}
 }
 
+// ── REPORT HELPERS ─────────────────────────────────────────
+function buildAssetRows(s){
+  const rows=[];
+  if(s.moneyHawl){
+    if(s.cash>0) rows.push({name:'نقد في اليد',detail:'سيولة نقدية',val:s.cash});
+    if(s.bank>0) rows.push({name:'أرصدة بنكية',detail:'حسابات وودائع بنكية',val:s.bank});
+  }
+  if(s.gHawl) goldArr.forEach(g=>rows.push({
+    name:`ذهب عيار ${g.k}`,
+    detail:`${g.w} جم · خالص ${g.pure.toFixed(2)} جم × ${fmt(s.gP)} ج.م`,
+    val:g.pure*s.gP}));
+  if(s.sHawl&&s.sW>0) rows.push({
+    name:'فضة',detail:`${s.sW} جم × ${fmt(s.sP)} ج.م`,val:s.silverVal});
+  stockArr.forEach(st=>rows.push({
+    name:`سهم: ${st.name}`,
+    detail:`${st.qty} سهم × ${fmt(st.price)} ج.م · ${st.type==='trade'?'تداول':'استثمار'}`,
+    val:st.qty*st.price}));
+  fundArr.forEach(f=>rows.push({
+    name:`صندوق: ${f.name}`,
+    detail:`${f.units} وحدة × ${fmt(f.price)} ج.م`,
+    val:f.units*f.price}));
+  return rows;
+}
+function buildExcludedNotes(s){
+  const ex=[];
+  if(!s.moneyHawl&&s.moneyVal>0) ex.push(`النقد والأرصدة بقيمة ${fmt(s.moneyVal)} ج.م — لم يمر عليها الحول، غير مُدرجة في الوعاء`);
+  if(!s.gHawl&&s.goldVal>0) ex.push(`الذهب بقيمة ${fmt(s.goldVal)} ج.م — لم يمر عليه الحول، غير مُدرج في الوعاء`);
+  if(!s.sHawl&&s.silverVal>0) ex.push(`الفضة بقيمة ${fmt(s.silverVal)} ج.م — لم يمر عليها الحول، غير مُدرجة في الوعاء`);
+  return ex;
+}
+
 // ── EXPORT EXCEL ───────────────────────────────────────────
 function exportExcel(){
+  calc();
+  const s=STATE;
+  const ref=reportRef();
+  const payer=$('payerName')?.value.trim()||'—';
+  const date=new Date().toLocaleDateString('ar-EG');
   const wb=XLSX.utils.book_new();
-  const gP=v('gPrice'),sP=v('sP');
+  const rows=buildAssetRows(s);
+  const verdict=s.nisab<=0?'غير محدد — أدخل سعر جرام الذهب'
+    :(s.reachedNisab?'بلغ النصاب — الزكاة واجبة':'لم يبلغ النصاب — الزكاة غير واجبة');
 
-  // Sheet 1: Zakat Calculation
-  const ws1=XLSX.utils.aoa_to_sheet([
-    ["حاسبة الزكاة السنوية — بالجنيه المصري"],
-    ["تاريخ الحساب",new Date().toLocaleDateString('ar-EG')],
+  // Sheet 1: Summary + asset breakdown
+  const aoa=[
+    ["تقرير الزكاة السنوية — بالجنيه المصري"],
+    ["دافع الزكاة",payer],
+    ["تاريخ التقرير",date],
+    ["رقم المرجع",ref],
     [],
-    ["نوع المال","القيمة (ج.م)","تفاصيل","الزكاة (ج.م)"],
-    ["النقد في اليد",v('cash'),"",+(v('cash')*0.025).toFixed(2)],
-    ["الأرصدة البنكية",v('bank'),"",+(v('bank')*0.025).toFixed(2)],
-    ...goldArr.map(g=>[`ذهب عيار ${g.k} (${g.w}جم)`,+(g.pure*gP).toFixed(2),`${g.pure.toFixed(2)} جم خالص`,+(g.pure*gP*0.025).toFixed(2)]),
-    [`الفضة (${v('sW')} جم)`,+(v('sW')*sP).toFixed(2),"",+(v('sW')*sP*0.025).toFixed(2)],
-    ...stockArr.map(s=>[`سهم ${s.name}`,+(s.qty*s.price).toFixed(2),s.type==='trade'?'تداول':'استثمار',+(s.qty*s.price*0.025).toFixed(2)]),
-    ...fundArr.map(f=>[`صندوق ${f.name}`,+(f.units*f.price).toFixed(2),"",+(f.units*f.price*0.025).toFixed(2)]),
-    [],["الخصوم"],
-    ["ديون قصيرة الأجل",v('lShort')],["أقساط مستحقة",v('lInst')],["التزامات تجارية",v('lBiz')],
-    [],["إجمالي الزكاة المستحقة",+grandZakat.toFixed(2),"ج.م"],
-  ]);
-  ws1['!cols']=[{wch:35},{wch:18},{wch:22},{wch:18}];
+    ["ملخص النصاب والحول"],
+    ["سعر جرام الذهب المرجعي (ج.م)",+s.refPrice.toFixed(2)],
+    ["النصاب — قيمة 85 جم ذهب عيار 24 (ج.م)",+s.nisab.toFixed(2)],
+    ["إجمالي الأصول الخاضعة للزكاة (ج.م)",+s.totalAssets.toFixed(2)],
+    ["إجمالي الخصوم المخصومة (ج.م)",+s.liab.toFixed(2)],
+    ["الوعاء الزكوي — صافي المال (ج.م)",+s.netWealth.toFixed(2)],
+    ["بلوغ النصاب",verdict],
+    [],
+    ["تفصيل الأصول"],
+    ["البند","التفاصيل","القيمة (ج.م)","معدل الزكاة","الزكاة (ج.م)"],
+    ...rows.map(r=>[r.name,r.detail,+r.val.toFixed(2),"2.5%",+(r.val*0.025).toFixed(2)]),
+    ["الإجمالي","",+s.totalAssets.toFixed(2),"",+(s.totalAssets*0.025).toFixed(2)],
+    [],
+    ["الخصوم"],
+    ["ديون قصيرة الأجل",+s.liabShort.toFixed(2)],
+    ["أقساط مستحقة خلال السنة",+s.liabInst.toFixed(2)],
+    ["التزامات تجارية",+s.liabBiz.toFixed(2)],
+    ["إجمالي الخصوم",+s.liab.toFixed(2)],
+    [],
+    ["احتساب الزكاة المستحقة"],
+    ["إجمالي الأصول الخاضعة للزكاة",+s.totalAssets.toFixed(2)],
+    ["ناقص: إجمالي الخصوم",+s.liab.toFixed(2)],
+    ["الوعاء الزكوي (صافي)",+s.netWealth.toFixed(2)],
+    ["معدل الزكاة","2.5%"],
+    ["الزكاة المستحقة (ج.م)",+s.grandZakat.toFixed(2)],
+  ];
+  const excl=buildExcludedNotes(s);
+  if(excl.length){
+    aoa.push([],["بنود مستثناة — لم يمر عليها الحول"]);
+    excl.forEach(e=>aoa.push([e]));
+  }
+  const ws1=XLSX.utils.aoa_to_sheet(aoa);
+  ws1['!cols']=[{wch:40},{wch:36},{wch:16},{wch:13},{wch:16}];
   XLSX.utils.book_append_sheet(wb,ws1,"حساب الزكاة");
 
-  // Sheet 2: Full Ledger
+  // Sheet 2: Full ledger
+  const dist=totalDistributed();
   const ledgerRows=[
     ["سجل توزيع الزكاة — دفتر الأستاذ"],
-    ["إجمالي الزكاة المستحقة",+grandZakat.toFixed(2),"ج.م"],
-    ["إجمالي الموزَّع",+totalDistributed().toFixed(2),"ج.م"],
-    ["المتبقي",+(grandZakat-totalDistributed()).toFixed(2),"ج.م"],
+    ["دافع الزكاة",payer],
+    ["رقم المرجع",ref],
+    ["إجمالي الزكاة المستحقة",+s.grandZakat.toFixed(2),"ج.م"],
+    ["إجمالي الموزَّع",+dist.toFixed(2),"ج.م"],
+    ["المتبقي",+(s.grandZakat-dist).toFixed(2),"ج.م"],
     [],
     ["المصرف","المستفيد / الحالة","المبلغ (ج.م)","التاريخ","الملاحظات","المرجع","طريقة الدفع","الحالة"],
   ];
   MASAREF.forEach(m=>{
-    if(m.entries.length>0){
-      m.entries.forEach(e=>{
-        const method={'cash':'نقدي','bank':'تحويل بنكي','wallet':'محفظة إلكترونية'}[e.method]||'—';
-        ledgerRows.push([m.name,e.name,e.amount,e.date,e.notes,e.ref,method,e.status==='paid'?'مدفوع':'مخطط']);
-      });
-    }
+    m.entries.forEach(e=>{
+      const method={'cash':'نقدي','bank':'تحويل بنكي','wallet':'محفظة إلكترونية'}[e.method]||'—';
+      ledgerRows.push([m.name,e.name,e.amount,e.date,e.notes,e.ref,method,e.status==='paid'?'مدفوع':'مخطط']);
+    });
   });
-  ledgerRows.push([],["الإجمالي الكلي","",+totalDistributed().toFixed(2)]);
+  ledgerRows.push([],["الإجمالي الكلي","",+dist.toFixed(2)]);
   const ws2=XLSX.utils.aoa_to_sheet(ledgerRows);
   ws2['!cols']=[{wch:18},{wch:28},{wch:16},{wch:14},{wch:30},{wch:14},{wch:16},{wch:10}];
   XLSX.utils.book_append_sheet(wb,ws2,"سجل التوزيع");
 
   // Sheet 3: Category summary
   const sumRows=[
-    ["ملخص المصارف"],["إجمالي الزكاة",+grandZakat.toFixed(2)],
-    [],["المصرف","عدد السجلات","إجمالي الصرف (ج.م)","نسبة من الزكاة %"],
-    ...MASAREF.map(m=>{
-      const ct=catTotal(MASAREF.indexOf(m));
-      return[m.name,m.entries.length,+ct.toFixed(2),grandZakat>0?+((ct/grandZakat)*100).toFixed(2):0];
+    ["ملخص المصارف الثمانية"],
+    ["إجمالي الزكاة المستحقة",+s.grandZakat.toFixed(2)],
+    [],
+    ["المصرف","عدد السجلات","إجمالي الصرف (ج.م)","النسبة المستهدفة %","نسبة من الزكاة %"],
+    ...MASAREF.map((m,i)=>{
+      const ct=catTotal(i);
+      return[m.name,m.entries.length,+ct.toFixed(2),m.pct,s.grandZakat>0?+((ct/s.grandZakat)*100).toFixed(2):0];
     }),
-    [],["المجموع","",+totalDistributed().toFixed(2),grandZakat>0?+((totalDistributed()/grandZakat)*100).toFixed(2):0],
+    [],["المجموع","",+dist.toFixed(2),"",s.grandZakat>0?+((dist/s.grandZakat)*100).toFixed(2):0],
   ];
   const ws3=XLSX.utils.aoa_to_sheet(sumRows);
-  ws3['!cols']=[{wch:22},{wch:14},{wch:20},{wch:16}];
+  ws3['!cols']=[{wch:22},{wch:14},{wch:20},{wch:18},{wch:18}];
   XLSX.utils.book_append_sheet(wb,ws3,"ملخص المصارف");
 
-  XLSX.writeFile(wb,"حاسبة_الزكاة.xlsx");
+  XLSX.writeFile(wb,`تقرير_الزكاة_${ref}.xlsx`);
 }
 
-// ── EXPORT PDF ─────────────────────────────────────────────
+// ── EXPORT PDF (Arabic print-to-PDF report) ────────────────
 function exportPDF(){
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF('p','mm','a4');
-  const date=new Date().toLocaleDateString('ar-EG');
-  const gP=v('gPrice'),sP=v('sP');
+  calc();
+  if(STATE.nisab<=0){
+    alert('أدخل «سعر الجرام (للنصاب)» أو سعر جرام الذهب أولاً لاحتساب النصاب وإصدار التقرير.');
+    return;
+  }
+  const w=window.open('','_blank');
+  if(!w){
+    alert('يرجى السماح بالنوافذ المنبثقة في المتصفح لعرض التقرير وطباعته.');
+    return;
+  }
+  w.document.open();
+  w.document.write(buildReportHTML(STATE));
+  w.document.close();
+}
 
-  doc.setFillColor(13,27,18);doc.rect(0,0,210,30,'F');
-  doc.setFillColor(201,168,76);doc.rect(0,28,210,2,'F');
-  doc.setFontSize(20);doc.setTextColor(201,168,76);doc.setFont(undefined,'bold');
-  doc.text("Zakat Calculator",105,14,{align:'center'});
-  doc.setFontSize(10);doc.setTextColor(180,180,150);doc.setFont(undefined,'normal');
-  doc.text(`Egyptian Pound (EGP)  |  ${date}`,105,23,{align:'center'});
+function buildReportHTML(s){
+  const date=new Date().toLocaleDateString('ar-EG',{year:'numeric',month:'long',day:'numeric'});
+  const ref=reportRef();
+  const payer=esc($('payerName')?.value.trim()||'');
+  const rows=buildAssetRows(s);
+  const excl=buildExcludedNotes(s);
 
-  let y=40;doc.setTextColor(30,30,30);
-  const sec=(title,rgb=[27,107,60])=>{
-    doc.setFillColor(...rgb);doc.rect(10,y-5,190,9,'F');
-    doc.setTextColor(255,255,255);doc.setFontSize(11);doc.setFont(undefined,'bold');
-    doc.text(title,105,y+0.5,{align:'center'});
-    doc.setTextColor(30,30,30);doc.setFont(undefined,'normal');y+=11;
-  };
-  const row=(lbl,val,alt=false)=>{
-    if(y>270){doc.addPage();y=20;}
-    doc.setFillColor(alt?235:245,alt?242:248,alt?232:240);
-    doc.rect(10,y-4,190,7,'F');
-    doc.setFontSize(10);doc.text(lbl,15,y);
-    doc.setFont(undefined,'bold');doc.text(String(val),195,y,{align:'right'});
-    doc.setFont(undefined,'normal');y+=8;
-  };
+  const assetRowsHTML=rows.length
+    ? rows.map(r=>`<tr>
+        <td class="r-name">${esc(r.name)}</td>
+        <td class="r-detail">${esc(r.detail)}</td>
+        <td class="r-num">${fmt(r.val)}</td>
+        <td class="r-num r-zak">${fmt(r.val*0.025)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="4" class="r-empty">لا توجد أصول مُدرجة ضمن الوعاء الزكوي</td></tr>`;
 
-  sec("Cash & Bank Balances",[13,59,40]);
-  row("Cash on hand:",fmt(v('cash'))+" EGP");row("Bank balances:",fmt(v('bank'))+" EGP",true);y+=3;
-  if(goldArr.length){sec("Gold",[100,80,10]);goldArr.forEach((g,i)=>row(`Gold Karat ${g.k} (${g.w}g):`,fmt(g.pure*gP)+" EGP",i%2===1));y+=3;}
-  if(v('sW')>0){sec("Silver",[60,60,70]);row(`Silver (${v('sW')}g):`,fmt(v('sW')*sP)+" EGP");y+=3;}
-  if(stockArr.length){sec("Stocks",[27,100,60]);stockArr.forEach((s,i)=>row(`${s.name}:`,fmt(s.qty*s.price)+" EGP",i%2===1));y+=3;}
-  if(fundArr.length){sec("Funds",[60,60,140]);fundArr.forEach((f,i)=>row(`${f.name}:`,fmt(f.units*f.price)+" EGP",i%2===1));y+=3;}
-  const liab=v('lShort')+v('lInst')+v('lBiz');
-  if(liab>0){sec("Liabilities",[150,40,30]);row("Total deductible:",fmt(liab)+" EGP");y+=3;}
+  const exclHTML=excl.length
+    ? `<div class="note note-warn"><strong>بنود لم يمر عليها الحول (غير مُدرجة):</strong><ul>${excl.map(e=>`<li>${esc(e)}</li>`).join('')}</ul></div>`
+    : '';
 
-  y+=4;
-  doc.setFillColor(13,27,18);doc.rect(10,y-7,190,16,'F');
-  doc.setFillColor(201,168,76);doc.rect(10,y+8,190,1,'F');
-  doc.setTextColor(201,168,76);doc.setFontSize(14);doc.setFont(undefined,'bold');
-  doc.text("Total Zakat Due:",22,y+2);doc.text(fmt(grandZakat)+" EGP",193,y+2,{align:'right'});
-  doc.setTextColor(30,30,30);doc.setFont(undefined,'normal');y+=22;
-
-  // Distribution ledger
   const hasEntries=MASAREF.some(m=>m.entries.length>0);
+  let ledgerHTML='';
   if(hasEntries){
-    sec("Zakat Distribution Ledger",[27,107,60]);
-    MASAREF.forEach(m=>{
-      if(m.entries.length===0)return;
-      if(y>265){doc.addPage();y=20;}
-      doc.setFillColor(30,60,40);doc.rect(10,y-4,190,7,'F');
-      doc.setTextColor(200,220,200);doc.setFontSize(10);doc.setFont(undefined,'bold');
-      doc.text(`${m.name} — Total: ${fmt(catTotal(MASAREF.indexOf(m)))} EGP`,15,y);
-      doc.setTextColor(30,30,30);doc.setFont(undefined,'normal');y+=9;
-      m.entries.forEach((e,ei)=>{
-        if(y>270){doc.addPage();y=20;}
-        row(`  ${e.name||'—'}  ${e.date?'('+e.date+')':''}`,fmt(e.amount)+" EGP",ei%2===1);
-      });
-      y+=2;
-    });
-
-    y+=4;
-    doc.setFillColor(20,50,30);doc.rect(10,y-5,190,10,'F');
-    doc.setTextColor(201,168,76);doc.setFontSize(11);doc.setFont(undefined,'bold');
-    doc.text("Total Distributed:",22,y+1);doc.text(fmt(totalDistributed())+" EGP",193,y+1,{align:'right'});
-    doc.setTextColor(30,30,30);doc.setFont(undefined,'normal');y+=12;
-    const rem=grandZakat-totalDistributed();
-    row("Remaining / Over:",fmt(Math.abs(rem))+" EGP"+(rem<0?" (Over)":""));
+    ledgerHTML=MASAREF.map((m,i)=>{
+      if(!m.entries.length) return '';
+      const ct=catTotal(i);
+      const entryRows=m.entries.map(e=>{
+        const method={'cash':'نقدي','bank':'تحويل بنكي','wallet':'محفظة إلكترونية'}[e.method]||'—';
+        return `<tr>
+          <td class="r-name">${esc(e.name||'—')}</td>
+          <td class="r-num">${fmt(e.amount)}</td>
+          <td>${esc(e.date||'—')}</td>
+          <td><span class="pill ${e.status==='paid'?'pill-paid':'pill-plan'}">${e.status==='paid'?'مدفوع':'مخطط'}</span></td>
+          <td>${esc(method)}</td>
+          <td class="r-detail">${esc(e.notes||'')}${e.ref?' · مرجع: '+esc(e.ref):''}</td>
+        </tr>`;
+      }).join('');
+      return `<div class="masraf-block">
+        <div class="masraf-head"><span>${m.icon} ${esc(m.name)}</span><span>${fmt(ct)} ج.م</span></div>
+        <table class="tbl"><thead><tr>
+          <th>المستفيد / الحالة</th><th>المبلغ</th><th>التاريخ</th><th>الحالة</th><th>الدفع</th><th>ملاحظات</th>
+        </tr></thead><tbody>${entryRows}</tbody></table>
+      </div>`;
+    }).join('');
+    const dist=totalDistributed();
+    const rem=s.grandZakat-dist;
+    ledgerHTML+=`<table class="tbl summary-tbl"><tbody>
+      <tr><td>إجمالي الزكاة المستحقة</td><td class="r-num">${fmt(s.grandZakat)} ج.م</td></tr>
+      <tr><td>إجمالي الموزَّع</td><td class="r-num">${fmt(dist)} ج.م</td></tr>
+      <tr class="row-strong"><td>${rem<0?'الزائد عن المستحق':'المتبقي للتوزيع'}</td><td class="r-num">${fmt(Math.abs(rem))} ج.م</td></tr>
+    </tbody></table>`;
   } else {
-    sec("Zakat Distribution",[27,107,60]);
-    MASAREF.forEach((m,i)=>row(`${m.name}:`,fmt(grandZakat/8)+" EGP",i%2===1));
+    const sugRows=MASAREF.map(m=>`<tr>
+      <td class="r-name">${m.icon} ${esc(m.name)}</td>
+      <td class="r-detail">${esc(m.def)}</td>
+      <td class="r-num">${m.pct}%</td>
+      <td class="r-num r-zak">${fmt(s.grandZakat*m.pct/100)}</td>
+    </tr>`).join('');
+    ledgerHTML=`<div class="note">لم تُسجَّل مصروفات بعد — في ما يلي توزيع مقترح على المصارف الثمانية بالنسب الحالية.</div>
+      <table class="tbl"><thead><tr><th>المصرف</th><th>التعريف</th><th>النسبة</th><th>المبلغ المقترح (ج.م)</th></tr></thead>
+      <tbody>${sugRows}</tbody></table>`;
   }
 
-  doc.setFontSize(8);doc.setTextColor(150,150,150);
-  doc.text("For guidance only · Consult a qualified Islamic scholar for verification",105,287,{align:'center'});
-  doc.save("Zakat_Calculator.pdf");
+  const verdictText=s.reachedNisab
+    ? 'بلغ المال النصاب ومرّ الحول — الزكاة واجبة'
+    : 'لم يبلغ المال النصاب — الزكاة غير واجبة على الوعاء الحالي';
+
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>تقرير الزكاة — ${ref}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Tajawal',sans-serif;background:#e9e9e6;color:#1e1e1e;line-height:1.55;}
+.toolbar{position:sticky;top:0;z-index:9;display:flex;gap:8px;justify-content:center;padding:12px;background:#0D1B12;}
+.toolbar button{font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;padding:9px 22px;border:none;border-radius:7px;cursor:pointer;}
+.toolbar button.primary{background:#C9A84C;color:#0D1B12;}
+.toolbar button.ghost{background:transparent;color:#C9A84C;border:1px solid #C9A84C;}
+.page{max-width:820px;margin:20px auto;background:#fff;padding:34px 38px;box-shadow:0 4px 26px rgba(0,0,0,.16);}
+.rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:3px solid #C9A84C;padding-bottom:16px;margin-bottom:22px;}
+.rhead-title{display:flex;gap:13px;align-items:center;}
+.logo{width:50px;height:50px;border-radius:11px;background:linear-gradient(135deg,#1A6B3C,#0D1B12);color:#C9A84C;display:flex;align-items:center;justify-content:center;font-size:27px;flex-shrink:0;}
+.rhead h1{font-family:'Amiri',serif;font-size:25px;color:#0D1B12;}
+.rhead-title p{font-size:12px;color:#666;margin-top:2px;}
+.rhead-meta{font-size:11.5px;text-align:left;white-space:nowrap;}
+.rhead-meta div{margin-bottom:4px;}
+.rhead-meta span{color:#999;margin-left:6px;}
+.rhead-meta strong{color:#0D1B12;}
+section{margin-bottom:22px;}
+h2{font-size:15px;color:#1A6B3C;border-right:4px solid #C9A84C;padding-right:10px;margin-bottom:12px;}
+.verdict{padding:11px 15px;border-radius:8px;font-weight:700;font-size:14px;margin-bottom:13px;}
+.verdict-ok{background:#e7f5ec;color:#16683a;border:1px solid #aedcbf;}
+.verdict-no{background:#fdeceb;color:#b5362a;border:1px solid #f0b8b2;}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
+.tbl th{background:#0D1B12;color:#E8D08A;font-weight:700;padding:8px 10px;text-align:right;font-size:11.5px;}
+.tbl td{padding:7px 10px;border-bottom:1px solid #eee;vertical-align:top;}
+.tbl tbody tr:nth-child(even){background:#faf8f1;}
+.tbl tfoot td{background:#f3edd9;font-weight:800;border-top:2px solid #C9A84C;}
+.tbl.kv td:first-child{color:#555;}
+.r-num{text-align:left;font-weight:700;white-space:nowrap;}
+.r-zak{color:#16683a;}
+.r-name{font-weight:700;}
+.r-detail{color:#777;font-size:11px;}
+.r-empty{text-align:center;color:#999;padding:15px;}
+.row-strong td{background:#f3edd9;font-weight:800;border-top:1px solid #C9A84C;}
+.note{background:#fbf7e8;border:1px solid #e7d9a8;border-radius:7px;padding:9px 13px;font-size:11.5px;color:#7a6418;margin-top:11px;}
+.note-warn{background:#fdeee0;border-color:#f0c89a;color:#9a5a18;}
+.note ul{margin:5px 17px 0;}
+.note li{margin-bottom:2px;}
+.zakat-final{display:flex;align-items:center;justify-content:center;gap:20px;background:#0D1B12;border-radius:12px;padding:18px 26px;flex-wrap:wrap;}
+.zf-calc{color:#8A9080;font-size:14px;font-weight:700;}
+.zf-calc b{color:#E8D08A;font-weight:700;}
+.zf-box{text-align:center;}
+.zf-label{color:#8A9080;font-size:12px;margin-bottom:2px;}
+.zf-amount{color:#C9A84C;font-size:31px;font-weight:800;font-family:'Amiri',serif;line-height:1;}
+.zf-amount small{font-size:14px;}
+.masraf-block{margin-bottom:14px;}
+.masraf-head{display:flex;justify-content:space-between;background:#1A6B3C;color:#fff;padding:7px 13px;font-weight:700;font-size:12.5px;border-radius:6px 6px 0 0;}
+.pill{padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;}
+.pill-paid{background:#e7f5ec;color:#16683a;}
+.pill-plan{background:#f3edd9;color:#8B6914;}
+.summary-tbl{margin-top:9px;width:340px;}
+.summary-tbl td{font-weight:700;}
+.fineprint{font-size:10.5px;color:#999;margin-top:7px;}
+.rfoot{border-top:1px solid #ddd;padding-top:13px;margin-top:26px;text-align:center;font-size:10.5px;color:#999;}
+.rfoot p{margin-bottom:3px;}
+@media print{
+  body{background:#fff;}
+  .page{box-shadow:none;margin:0;max-width:none;padding:0;}
+  .no-print{display:none!important;}
+  section,.masraf-block,.zakat-final{page-break-inside:avoid;}
+  @page{margin:14mm;}
+}
+</style>
+</head><body>
+<div class="toolbar no-print">
+  <button class="primary" onclick="window.print()">🖨️ طباعة / حفظ PDF</button>
+  <button class="ghost" onclick="window.close()">إغلاق</button>
+</div>
+<div class="page">
+  <header class="rhead">
+    <div class="rhead-title">
+      <div class="logo">☪</div>
+      <div>
+        <h1>تقرير الزكاة السنوية</h1>
+        <p>احتساب وتوزيع زكاة المال — بالجنيه المصري</p>
+      </div>
+    </div>
+    <div class="rhead-meta">
+      ${payer?`<div><span>دافع الزكاة</span><strong>${payer}</strong></div>`:''}
+      <div><span>تاريخ التقرير</span><strong>${date}</strong></div>
+      <div><span>رقم المرجع</span><strong>${ref}</strong></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>١ · ملخص النصاب والحول</h2>
+    <div class="verdict ${s.reachedNisab?'verdict-ok':'verdict-no'}">${s.reachedNisab?'✓':'✕'} ${verdictText}</div>
+    <table class="tbl kv"><tbody>
+      <tr><td>سعر جرام الذهب المرجعي</td><td class="r-num">${fmt(s.refPrice)} ج.م</td></tr>
+      <tr><td>النصاب (قيمة 85 جم ذهب عيار 24)</td><td class="r-num">${fmt(s.nisab)} ج.م</td></tr>
+      <tr><td>إجمالي الأصول الخاضعة للزكاة</td><td class="r-num">${fmt(s.totalAssets)} ج.م</td></tr>
+      <tr><td>إجمالي الخصوم</td><td class="r-num">− ${fmt(s.liab)} ج.م</td></tr>
+      <tr class="row-strong"><td>الوعاء الزكوي (صافي المال)</td><td class="r-num">${fmt(s.netWealth)} ج.م</td></tr>
+    </tbody></table>
+    ${exclHTML}
+  </section>
+
+  <section>
+    <h2>٢ · تفصيل الأصول</h2>
+    <table class="tbl">
+      <thead><tr><th>البند</th><th>التفاصيل</th><th>القيمة (ج.م)</th><th>الزكاة 2.5% (ج.م)</th></tr></thead>
+      <tbody>${assetRowsHTML}</tbody>
+      <tfoot><tr><td colspan="2">الإجمالي</td><td class="r-num">${fmt(s.totalAssets)}</td><td class="r-num">${fmt(s.totalAssets*0.025)}</td></tr></tfoot>
+    </table>
+    <p class="fineprint">* الزكاة على مستوى البند استرشادية؛ المبلغ المُلزِم هو زكاة الوعاء الزكوي بعد خصم الخصوم.</p>
+  </section>
+
+  <section class="zakat-final">
+    <div class="zf-calc"><b>${fmt(s.netWealth)} ج.م</b> × <b>2.5%</b> =</div>
+    <div class="zf-box">
+      <div class="zf-label">الزكاة المستحقة</div>
+      <div class="zf-amount">${fmt(s.grandZakat)} <small>ج.م</small></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>٣ · ${hasEntries?'سجل توزيع المصارف':'التوزيع المقترح على المصارف'}</h2>
+    ${ledgerHTML}
+  </section>
+
+  <footer class="rfoot">
+    <p>هذا التقرير لأغراض الاسترشاد فقط. للتأكد من الأحكام الشرعية يُرجى مراجعة عالم أو جهة فتوى مختصة.</p>
+    <p>تم الإنشاء بواسطة حاسبة الزكاة · رقم المرجع ${ref}</p>
+  </footer>
+</div>
+<script>window.addEventListener('load',function(){setTimeout(function(){try{window.print();}catch(e){}},450);});<\/script>
+</body></html>`;
 }
 
 // ── INIT ───────────────────────────────────────────────────
