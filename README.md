@@ -1,69 +1,54 @@
-# حاسبة الزكاة — Zakat Calculator
+# البنك الشخصي — Personal Bank
 
-حاسبة زكاة سنوية بالجنيه المصري: نقد، ذهب، فضة، أسهم، صناديق، خصوم، وتوزيع المصارف الثمانية.
+تطبيق شخصي لتسجيل الثروة عبر جميع الحسابات والأصول (نقد، ذهب، فضة، أسهم، صناديق، عقارات، بضاعة تجارية…)، مع احتساب زكاة دقيق يراعي الحول لكل بند على حدة.
+
+Personal-bank web app for tracking wealth across every account and asset shape (cash, gold, silver, stocks, funds, real estate, business inventory…), with a zakat engine that respects per-lot hawl.
 
 ## Features
 
-- **حساب الزكاة**: نقد وأرصدة، ذهب (عيارات متعددة)، فضة، أسهم (تداول/استثمار)، صناديق، وخصوم قابلة للخصم
-- **توزيع المصارف**: دفتر أستاذ للمصارف الثمانية (الفقراء، المساكين، العاملين عليها، إلخ) مع إضافة/تعديل/حذف صرف
-- **تصدير**: Excel و PDF
+- **Wealth ledger** — accounts (banks, wallets, safes, brokers, real estate, businesses) and asset lots (cash, gold with karat, silver, stocks, funds, receivables, inventory, personal items).
+- **Dated acquisitions** — every asset add and every deposit stamps its acquisition date so hawl is tracked lot-by-lot.
+- **Transactions engine** — deposit, withdraw, transfer, buy, sell, income, expense, revalue, zakat paid. Withdrawals consume lots FIFO; transfers preserve the original acquisition dates of the moved money.
+- **Two zakat modes**
+  - **FIFO** — zakat only on lots aged ≥ 365 days (each dirham has its own hawl).
+  - **Pool-anchored** — you set the date the pool first reached nisab; zakat is due on the whole pool at each anniversary.
+- **Dashboard** — net wealth, distribution by asset type, hawl-aging bar, nisab check, live zakat due.
+- **Arabic reports** — professional RTL print-to-PDF report (nisab & hawl summary, itemized breakdown, verdict, references) + 3-sheet Excel export (zakat, assets, transactions).
+- **Local-first storage** — everything stays in your browser (`localStorage`). One-click JSON backup / restore for moving between devices.
+
+## Stack
+
+- Preact + `@preact/signals` for fine-grained reactivity
+- Vite as build tool
+- Vanilla CSS with the original dark-green + gold Amiri/Tajawal design
+- No backend, no framework lock-in, deploys as static files
 
 ## Run locally
 
-Open `index.html` in a browser, or serve the folder:
-
 ```bash
-npx serve .
-# or
-python -m http.server 8080
+npm install
+npm run dev       # http://localhost:5173
+npm run build     # outputs dist/
+npm run preview   # preview the built app
 ```
-
-## Deploy to GitHub
-
-Use a **new** repo only for this app (recommended: create the repo inside this folder so only V4 files are tracked).
-
-1. Create a new repository on [GitHub](https://github.com/new) (e.g. `zakat-calculator`). Do **not** add a README or .gitignore there.
-2. In **this folder** (Zakat Calculator/V4), run:
-
-```powershell
-cd "c:\Users\ahmed\OneDrive - Mansoura University - Main\APPS\Zakat Calculator\V4"
-git init
-git add index.html zakat-calculator.html README.md .gitignore
-git commit -m "Zakat Calculator app"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/zakat-calculator.git
-git push -u origin main
-```
-
-Replace `YOUR_USERNAME` with your GitHub username.
 
 ## Deploy to Vercel
 
-1. Go to [vercel.com](https://vercel.com) and sign in (with GitHub).
-2. **Import Git Repository**: New Project → Import the `zakat-calculator` repo.
-3. **Configure**:  
-   - Framework Preset: **Other**  
-   - Build Command: leave empty  
-   - Output Directory: leave empty or `.`  
-   - Root Directory: `.`
-4. Deploy. Vercel will serve `index.html` at the root.
+Vercel auto-detects Vite. Just import the repo — build command `npm run build`, output `dist`. `vercel.json` handles SPA rewrites.
 
-**Or with Vercel CLI:**
+## Data model in a nutshell
 
-```bash
-npm i -g vercel
-cd "Zakat Calculator/V4"
-vercel
-```
+- **Account** — a place where wealth is held (bank, wallet, safe, broker, real-estate, business).
+- **Lot** — a dated acquisition unit inside an account. Every asset shape is a lot: cash amount, gold weight, stock units, etc. `acquiredAt` is the hawl anchor for that lot.
+- **Transaction** — a dated event that creates or consumes lots (FIFO for withdrawals; date-preserving for transfers).
 
-Follow the prompts and deploy. Your app will be live at a `*.vercel.app` URL.
+## Roadmap
 
-## Files
-
-| File | Purpose |
-|------|--------|
-| `index.html` | Main app (same as zakat-calculator.html); use this as entry for Vercel |
-| `zakat-calculator.html` | Same app (backup name) |
+- Phase 3: full zakat engine with reports (present)
+- Phase 4: specialized fiqh (rental income زكاة الغلة, business عروض التجارة)
+- Phase 5: budgets, income/expense analytics, net-worth trend
+- Phase 6: cloud sync (Supabase) for multi-device
+- Phase 7: live gold/silver/stock prices via API
 
 ## License
 

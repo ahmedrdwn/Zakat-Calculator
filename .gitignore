@@ -7,5 +7,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Optional: keep original name if you prefer
-# zakat-calculator.html
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.vite/
