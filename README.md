@@ -15,6 +15,7 @@ Personal-bank web app for tracking wealth across every account and asset shape (
 - **Dashboard** — net wealth, distribution by asset type, hawl-aging bar, nisab check, live zakat due.
 - **Arabic reports** — professional RTL print-to-PDF report (nisab & hawl summary, itemized breakdown, verdict, references) + 3-sheet Excel export (zakat, assets, transactions).
 - **Local-first storage + optional cloud sync** — everything stays in your browser (`localStorage`) by default. Sign in with email or Google to sync automatically across devices via **Supabase** (see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)). One-click JSON backup / restore too.
+- **Installable as a PWA** — add to your phone's home screen (iOS Safari or Android Chrome) and it runs full-screen, offline-capable, like a native app. The header's *"ثبّت التطبيق"* button walks you through the install flow.
 
 ## Stack
 
@@ -49,6 +50,7 @@ Vercel auto-detects Vite. Just import the repo — build command `npm run build`
 - Phase 5: budgets, income/expense analytics, net-worth trend
 - Phase 6: cloud sync via Supabase (email + Google) ✅ — see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
 - Phase 7: live gold/silver/stock prices via API
+- Phase 8: installable PWA with offline support ✅
 
 ## License
 
