@@ -52,22 +52,39 @@ export function LotForm({ open, onClose, existing, defaultAccountId, defaultAsse
         <button class="btn btn-ghost" onClick={onClose}>إلغاء</button>
       </>}
     >
-      <div class="frow">
-        <Field label="الحساب / الحافظة">
-          <select value={form.accountId} onChange={patch('accountId')}>
-            <option value="">— اختر —</option>
-            {accts.map(a => <option value={a.id}>{a.name}</option>)}
-          </select>
-        </Field>
-        <Field label="نوع الأصل">
-          <select value={form.assetType} onChange={patch('assetType')} disabled={isEdit}>
-            {ASSET_TYPES.map(t => <option value={t.id}>{t.icon} {t.label}</option>)}
-          </select>
-        </Field>
-        <Field label="تاريخ الاقتناء" hint="يُستخدم لحساب الحول">
-          <input type="date" value={form.acquiredAt} onInput={patch('acquiredAt')} />
-        </Field>
-      </div>
+      {(() => {
+        // Label the holder-picker per asset type so it matches the mental
+        // model — gold sits in a safe, stocks with a broker, cash at a bank.
+        const holder = {
+          cash:       { label: 'الحساب البنكي / المحفظة', hint: 'المكان الذي يحتفظ به المال' },
+          receivable: { label: 'مسجَّل تحت', hint: 'حساب أو محفظة يظهر الدين ضمن أصولها' },
+          gold:       { label: 'مكان الحفظ', hint: 'أين هذا الذهب؟ خزنة، بنك، أو غيرها — لا يشترط أن يكون بنكاً' },
+          silver:     { label: 'مكان الحفظ', hint: 'أين هذه الفضة؟ خزنة أو مكان محفوظ' },
+          stock:      { label: 'حساب الوسيط', hint: 'الوسيط الذي يُحتفظ لديه بالأسهم' },
+          fund:       { label: 'حساب الوسيط', hint: 'الوسيط الذي يُحتفظ لديه بوحدات الصندوق' },
+          inventory:  { label: 'النشاط التجاري', hint: 'المتجر أو النشاط الذي تعود إليه البضاعة' },
+          realestate: { label: 'التصنيف', hint: 'مجموعة العقارات (اختر أو أنشئ مجموعة)' },
+          personal:   { label: 'التصنيف', hint: 'مجموعة الأصول الشخصية' },
+        }[at.id] || { label: 'الحافظة', hint: '' };
+        return (
+          <div class="frow">
+            <Field label={holder.label} hint={holder.hint}>
+              <select value={form.accountId} onChange={patch('accountId')}>
+                <option value="">— اختر —</option>
+                {accts.map(a => <option value={a.id}>{a.name}</option>)}
+              </select>
+            </Field>
+            <Field label="نوع الأصل">
+              <select value={form.assetType} onChange={patch('assetType')} disabled={isEdit}>
+                {ASSET_TYPES.map(t => <option value={t.id}>{t.icon} {t.label}</option>)}
+              </select>
+            </Field>
+            <Field label="تاريخ الاقتناء" hint="يُستخدم لحساب الحول">
+              <input type="date" value={form.acquiredAt} onInput={patch('acquiredAt')} />
+            </Field>
+          </div>
+        );
+      })()}
 
       {/* Type-specific fields */}
       {(at.id === 'cash' || at.id === 'receivable') && (() => {
