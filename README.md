@@ -14,7 +14,7 @@ Personal-bank web app for tracking wealth across every account and asset shape (
   - **Pool-anchored** — you set the date the pool first reached nisab; zakat is due on the whole pool at each anniversary.
 - **Dashboard** — net wealth, distribution by asset type, hawl-aging bar, nisab check, live zakat due.
 - **Arabic reports** — professional RTL print-to-PDF report (nisab & hawl summary, itemized breakdown, verdict, references) + 3-sheet Excel export (zakat, assets, transactions).
-- **Local-first storage** — everything stays in your browser (`localStorage`). One-click JSON backup / restore for moving between devices.
+- **Local-first storage + optional cloud sync** — everything stays in your browser (`localStorage`) by default. Sign in with email or Google to sync automatically across devices via **Supabase** (see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)). One-click JSON backup / restore too.
 
 ## Stack
 
@@ -44,10 +44,10 @@ Vercel auto-detects Vite. Just import the repo — build command `npm run build`
 
 ## Roadmap
 
-- Phase 3: full zakat engine with reports (present)
+- Phase 3: full zakat engine with reports ✅
 - Phase 4: specialized fiqh (rental income زكاة الغلة, business عروض التجارة)
 - Phase 5: budgets, income/expense analytics, net-worth trend
-- Phase 6: cloud sync (Supabase) for multi-device
+- Phase 6: cloud sync via Supabase (email + Google) ✅ — see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
 - Phase 7: live gold/silver/stock prices via API
 
 ## License

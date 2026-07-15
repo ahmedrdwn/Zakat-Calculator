@@ -1,8 +1,13 @@
 import { useState } from 'preact/hooks';
-import { downloadBackup, restoreBackup, wipeAll } from '../data/storage.js';
+import { downloadBackup, restoreBackup } from '../data/storage.js';
+import { userSig, syncStatusSig, signOut, pushToCloud, pullFromCloud } from '../data/sync.js';
+import { supabaseEnabled } from '../data/supabase.js';
+import { AuthModal } from './Auth.jsx';
 
 export function Header() {
   const [busy, setBusy] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const onImport = e => {
     const f = e.target.files?.[0];
@@ -13,6 +18,16 @@ export function Header() {
       .catch(err => alert('فشل الاستعادة: ' + err.message))
       .finally(() => { setBusy(false); e.target.value = ''; });
   };
+
+  const user = userSig.value;
+  const status = syncStatusSig.value;
+  const statusLabel = {
+    idle: '',
+    pulling: '⏳ يجلب…',
+    pushing: '⏳ يحفظ…',
+    synced: '✓ محفوظ سحابياً',
+    error: '⚠ خطأ مزامنة',
+  }[status] || '';
 
   return (
     <header class="app-hdr">
@@ -26,13 +41,42 @@ export function Header() {
         </a>
         <div class="hdr-spacer" />
         <div class="hdr-actions">
-          <button class="btn btn-ghost btn-sm" onClick={downloadBackup} disabled={busy}>💾 نسخة</button>
-          <label class="btn btn-ghost btn-sm" style="cursor:pointer">
-            📥 استعادة
-            <input type="file" accept="application/json" style="display:none" onChange={onImport} />
-          </label>
+          {statusLabel && <span class="badge badge-muted" style="align-self:center">{statusLabel}</span>}
+          {supabaseEnabled && !user && (
+            <button class="btn btn-gold btn-sm" onClick={() => setAuthOpen(true)}>🔐 تسجيل الدخول</button>
+          )}
+          {user && (
+            <div style="position:relative">
+              <button class="btn btn-ghost btn-sm" onClick={() => setMenuOpen(!menuOpen)}>
+                👤 {user.email?.split('@')[0] || 'الحساب'}
+              </button>
+              {menuOpen && (
+                <div style="position:absolute;top:calc(100% + 6px);left:0;background:var(--card);border:1px solid var(--gold-border);border-radius:10px;box-shadow:var(--shadow-lg);padding:6px;min-width:200px;z-index:210">
+                  <div style="padding:8px 12px;font-size:12px;color:var(--text-dim);border-bottom:1px solid var(--border);margin-bottom:4px">{user.email}</div>
+                  <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:2px" onClick={() => { pullFromCloud(); setMenuOpen(false); }}>⬇ سحب من السحابة</button>
+                  <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:2px" onClick={() => { pushToCloud(); setMenuOpen(false); }}>⬆ رفع للسحابة</button>
+                  <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:2px" onClick={downloadBackup}>💾 تنزيل نسخة</button>
+                  <label class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;cursor:pointer;margin-bottom:2px">
+                    📥 استعادة من ملف
+                    <input type="file" accept="application/json" style="display:none" onChange={onImport} />
+                  </label>
+                  <button class="btn btn-danger" style="width:100%;justify-content:flex-start" onClick={() => { signOut(); setMenuOpen(false); }}>🚪 تسجيل الخروج</button>
+                </div>
+              )}
+            </div>
+          )}
+          {!user && (
+            <>
+              <button class="btn btn-ghost btn-sm" onClick={downloadBackup} disabled={busy}>💾</button>
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+                📥
+                <input type="file" accept="application/json" style="display:none" onChange={onImport} />
+              </label>
+            </>
+          )}
         </div>
       </div>
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
     </header>
   );
 }
