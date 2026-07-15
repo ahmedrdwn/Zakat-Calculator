@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
 import { downloadBackup, restoreBackup } from '../data/storage.js';
-import { userSig, syncStatusSig, signOut, pushToCloud, pullFromCloud } from '../data/sync.js';
+import { userSig, signOut, pushToCloud, pullFromCloud } from '../data/sync.js';
 import { supabaseEnabled } from '../data/supabase.js';
 import { AuthModal } from './Auth.jsx';
 import { InstallButton } from './Install.jsx';
+import { SyncStatusBadge } from './SyncStatus.jsx';
 
 export function Header() {
   const [busy, setBusy] = useState(false);
@@ -21,14 +22,6 @@ export function Header() {
   };
 
   const user = userSig.value;
-  const status = syncStatusSig.value;
-  const statusLabel = {
-    idle: '',
-    pulling: '⏳ يجلب…',
-    pushing: '⏳ يحفظ…',
-    synced: '✓ محفوظ سحابياً',
-    error: '⚠ خطأ مزامنة',
-  }[status] || '';
 
   return (
     <header class="app-hdr">
@@ -42,7 +35,7 @@ export function Header() {
         </a>
         <div class="hdr-spacer" />
         <div class="hdr-actions">
-          {statusLabel && <span class="badge badge-muted" style="align-self:center">{statusLabel}</span>}
+          <SyncStatusBadge />
           <InstallButton />
           {!user && (
             <button
