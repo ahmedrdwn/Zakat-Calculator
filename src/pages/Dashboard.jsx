@@ -22,6 +22,7 @@ const QUICK = [
 export function Dashboard() {
   const [showLot, setShowLot] = useState(false);
   const [quickAsset, setQuickAsset] = useState(null);
+  const [quickAcctId, setQuickAcctId] = useState('');
   const [showTx, setShowTx] = useState(false);
   const [showAcc, setShowAcc] = useState(false);
 
@@ -35,12 +36,19 @@ export function Dashboard() {
   const noData = activeLots.value.length === 0 && accts.length === 0;
 
   // Tap a quick-add chip → open LotForm pre-set to that asset type.
-  // If the user has no accounts yet, auto-create a sensible default so they
-  // don't have to bounce to the Accounts tab first.
+  // If a matching holder already exists (same kind), reuse it silently.
+  // Otherwise auto-create a sensible default so the user doesn't have to
+  // bounce to the Accounts tab first.
   const openQuickAdd = q => {
-    if (accts.length === 0) {
-      addAccount({ name: q.defaultAcct.name, kind: q.defaultAcct.kind, currency: 'EGP' });
+    const match = accts.find(a => a.kind === q.defaultAcct.kind);
+    let acctId;
+    if (match) {
+      acctId = match.id;
+    } else {
+      const created = addAccount({ name: q.defaultAcct.name, kind: q.defaultAcct.kind, currency: 'EGP' });
+      acctId = created.id;
     }
+    setQuickAcctId(acctId);
     setQuickAsset(q.id);
   };
 
@@ -180,7 +188,8 @@ export function Dashboard() {
       <LotForm
         open={!!quickAsset}
         defaultAssetType={quickAsset}
-        onClose={() => setQuickAsset(null)}
+        defaultAccountId={quickAcctId}
+        onClose={() => { setQuickAsset(null); setQuickAcctId(''); }}
       />
       <TransactionForm open={showTx} onClose={() => setShowTx(false)} />
     </>
