@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
-import { activeAccounts, activeLots, accountBalance, deleteAccount } from '../state/store.js';
-import { accountKind } from '../models/index.js';
+import { activeAccounts, activeLots, accountBalance, accountNativeBalance, deleteAccount } from '../state/store.js';
+import { accountKind, currencyByCode } from '../models/index.js';
 import { fmt } from '../utils/index.js';
 import { AccountForm } from '../components/AccountForm.jsx';
 import { LotForm } from '../components/LotForm.jsx';
@@ -37,13 +37,19 @@ export function Accounts() {
           {accts.map(a => {
             const k = accountKind(a.kind);
             const bal = accountBalance(a.id);
+            const native = accountNativeBalance(a.id);
+            const cur = currencyByCode(a.currency);
             const lots = activeLots.value.filter(l => l.accountId === a.id);
+            const isForeign = a.currency !== 'EGP';
             return (
               <div class="card" key={a.id}>
                 <div class="card-hd">
                   <h3><span class="icon">{k.icon}</span>{a.name}</h3>
                   <div style="display:flex;align-items:center;gap:8px">
-                    <span class="badge badge-gold">{fmt(bal)} ج.م</span>
+                    <div style="text-align:left">
+                      {isForeign && <div style="font-weight:800;color:var(--text)">{fmt(native)} <span style="color:var(--text-dim);font-size:12px">{cur.symbol}</span></div>}
+                      <div class="badge badge-gold">{fmt(bal)} ج.م{isForeign ? ' ≈' : ''}</div>
+                    </div>
                     <button class="btn btn-icon" title="تعديل" onClick={() => setEditing(a)}>✏️</button>
                     <ConfirmButton onConfirm={() => remove(a)} />
                   </div>
@@ -51,7 +57,7 @@ export function Accounts() {
                 <div class="card-body">
                   <div style="display:flex;gap:8px;font-size:12px;color:var(--text-dim);margin-bottom:10px">
                     <span>{k.label}</span>·
-                    <span>{a.currency}</span>·
+                    <span>{cur.label} ({a.currency})</span>·
                     <span>{lots.length} أصل</span>
                   </div>
                   {a.notes && <p style="font-size:12.5px;color:var(--text-dim);margin-bottom:12px">{a.notes}</p>}

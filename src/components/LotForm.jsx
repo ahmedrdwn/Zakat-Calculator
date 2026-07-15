@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'preact/hooks';
 import { Modal, Field } from './ui.jsx';
-import { ASSET_TYPES, LOT_PURPOSES } from '../models/index.js';
+import { ASSET_TYPES, LOT_PURPOSES, currencyByCode } from '../models/index.js';
 import { addLot, updateLot, activeAccounts, settingsSig } from '../state/store.js';
 import { todayISO } from '../utils/index.js';
 
@@ -28,6 +28,12 @@ export function LotForm({ open, onClose, existing, defaultAccountId, defaultAsse
     if (!form.acquiredAt) { alert('اختر تاريخ الاقتناء'); return; }
     const asset = at.id;
     const patched = { ...form };
+    // Cash/receivable lots inherit their currency from the account so
+    // FIFO consumption and FX conversion stay consistent.
+    if (asset === 'cash' || asset === 'receivable') {
+      const acct = accts.find(a => a.id === form.accountId);
+      patched.currency = acct?.currency || 'EGP';
+    }
     if ((asset === 'cash' || asset === 'receivable') && !(patched.amount > 0)) { alert('أدخل مبلغاً موجباً'); return; }
     if ((asset === 'gold' || asset === 'silver') && !(patched.weight > 0)) { alert('أدخل وزناً موجباً'); return; }
     if ((asset === 'stock' || asset === 'fund' || asset === 'inventory') && !(patched.units > 0)) { alert('أدخل عدداً موجباً'); return; }
@@ -64,16 +70,20 @@ export function LotForm({ open, onClose, existing, defaultAccountId, defaultAsse
       </div>
 
       {/* Type-specific fields */}
-      {(at.id === 'cash' || at.id === 'receivable') && (
-        <div class="frow">
-          <Field label="المبلغ (ج.م)">
-            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">ج.م</span></div>
-          </Field>
-          <Field label={at.id === 'receivable' ? 'المدين' : 'اسم / وصف'}>
-            <input type="text" value={form.label} onInput={patch('label')} placeholder="اختياري" />
-          </Field>
-        </div>
-      )}
+      {(at.id === 'cash' || at.id === 'receivable') && (() => {
+        const acctCurrency = accts.find(a => a.id === form.accountId)?.currency || 'EGP';
+        const cur = currencyByCode(acctCurrency);
+        return (
+          <div class="frow">
+            <Field label={`المبلغ (${cur.code})`} hint={acctCurrency !== 'EGP' ? 'يُحسب بالجنيه المصري تلقائياً حسب سعر الصرف' : undefined}>
+              <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">{cur.symbol}</span></div>
+            </Field>
+            <Field label={at.id === 'receivable' ? 'المدين' : 'اسم / وصف'}>
+              <input type="text" value={form.label} onInput={patch('label')} placeholder="اختياري" />
+            </Field>
+          </div>
+        );
+      })()}
       {(at.id === 'gold' || at.id === 'silver') && (
         <div class="frow">
           <Field label="الوزن (جرام)">

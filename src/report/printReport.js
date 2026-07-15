@@ -88,7 +88,7 @@ body{font-family:'Tajawal',sans-serif;background:#e9e9e6;color:#1e1e1e;line-heig
 .page{max-width:820px;margin:20px auto;background:#fff;padding:34px 38px;box-shadow:0 4px 26px rgba(0,0,0,.16);}
 .rhead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:3px solid #C9A84C;padding-bottom:16px;margin-bottom:22px;}
 .rhead-title{display:flex;gap:13px;align-items:center;}
-.logo{width:50px;height:50px;border-radius:11px;background:linear-gradient(135deg,#1A6B3C,#0D1B12);color:#C9A84C;display:flex;align-items:center;justify-content:center;font-size:27px;flex-shrink:0;}
+.logo{flex-shrink:0;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15));}
 .rhead h1{font-family:'Amiri',serif;font-size:25px;color:#0D1B12;}
 .rhead-title p{font-size:12px;color:#666;margin-top:2px;}
 .rhead-meta{font-size:11.5px;text-align:left;white-space:nowrap;}
@@ -139,7 +139,31 @@ h2{font-size:15px;color:#1A6B3C;border-right:4px solid #C9A84C;padding-right:10p
 <div class="page">
   <header class="rhead">
     <div class="rhead-title">
-      <div class="logo">☪</div>
+      <svg class="logo" width="54" height="54" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="rl-gold" x1="18%" y1="8%" x2="82%" y2="94%">
+            <stop offset="0%" stop-color="#F5E5B0"/><stop offset="32%" stop-color="#E8D08A"/>
+            <stop offset="58%" stop-color="#C9A84C"/><stop offset="88%" stop-color="#8B6914"/>
+          </linearGradient>
+          <radialGradient id="rl-em" cx="50%" cy="42%" r="72%">
+            <stop offset="0%" stop-color="#1F7A46"/><stop offset="45%" stop-color="#0D3B22"/>
+            <stop offset="100%" stop-color="#06180E"/>
+          </radialGradient>
+          <mask id="rl-cr" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+            <rect width="128" height="128" fill="black"/>
+            <circle cx="60" cy="66" r="19" fill="white"/>
+            <circle cx="69" cy="60" r="16" fill="black"/>
+          </mask>
+        </defs>
+        <g transform="translate(64 64)">
+          <rect x="-52" y="-52" width="104" height="104" fill="url(#rl-gold)" rx="3"/>
+          <rect x="-52" y="-52" width="104" height="104" fill="url(#rl-gold)" rx="3" transform="rotate(45)"/>
+        </g>
+        <circle cx="64" cy="64" r="40" fill="url(#rl-em)"/>
+        <circle cx="64" cy="64" r="40" fill="none" stroke="#E8D08A" stroke-width="1.2" stroke-opacity="0.85"/>
+        <circle cx="60" cy="66" r="19" fill="url(#rl-gold)" mask="url(#rl-cr)"/>
+        <polygon transform="translate(80 58)" fill="#F5E5B0" points="0,-5 1.18,-1.62 4.76,-1.55 1.90,0.62 2.94,4.05 0,2 -2.94,4.05 -1.90,0.62 -4.76,-1.55 -1.18,-1.62"/>
+      </svg>
       <div>
         <h1>تقرير الزكاة السنوية</h1>
         <p>البنك الشخصي — احتساب دقيق يراعي الحول</p>
