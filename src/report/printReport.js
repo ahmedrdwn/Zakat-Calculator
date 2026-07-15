@@ -1,5 +1,5 @@
 import { fmt, fmtDate, esc, daysSince } from '../utils/index.js';
-import { assetType } from '../models/index.js';
+import { assetType, masraf } from '../models/index.js';
 import { settingsSig, accountsSig } from '../state/store.js';
 
 function reportRef() {
@@ -54,6 +54,17 @@ function buildHTML(result) {
   const anchorNote = result.mode === 'pool' && result.anchor
     ? `تاريخ الحول: <strong>${esc(fmtDate(result.anchor))}</strong> · الذكرى: <strong>${esc(fmtDate(result.anniversary))}</strong>`
     : '';
+
+  const paidTxs = result.paidTxs || [];
+  const paidRows = paidTxs.length ? paidTxs.slice().sort((a,b) => (a.at||'').localeCompare(b.at||'')).map(t => {
+    const m = masraf(t.masrafId);
+    return `<tr>
+      <td class="r-name">${m ? esc(m.icon + ' ' + m.label) : '🤲 زكاة'}${t.recipient ? ' — ' + esc(t.recipient) : ''}</td>
+      <td>${esc(fmtDate(t.at))}</td>
+      <td class="r-detail">${esc(t.notes || '')}${t.ref ? ' · مرجع: ' + esc(t.ref) : ''}</td>
+      <td class="r-num">${fmt(t.amount)}</td>
+    </tr>`;
+  }).join('') : '';
 
   const verdictText = result.reachedNisab
     ? 'بلغ المال النصاب — الزكاة واجبة'
@@ -150,6 +161,8 @@ h2{font-size:15px;color:#1A6B3C;border-right:4px solid #C9A84C;padding-right:10p
       <tr><td>الوعاء ${result.mode === 'fifo' ? 'المؤهل (أتمّ الحول)' : 'الحالي'}</td><td class="r-num">${fmt(baseValue)} ج.م</td></tr>
       ${result.mode === 'fifo' ? `<tr><td>مبالغ لم يمر عليها الحول</td><td class="r-num">${fmt(result.youngPool || 0)} ج.م</td></tr>` : ''}
       <tr class="row-strong"><td>معدل الزكاة × الوعاء = الزكاة المستحقة</td><td class="r-num">${fmt(result.zakatDue)} ج.م</td></tr>
+      <tr><td>الزكاة المدفوعة خلال الحول${result.cycleStart ? ` (منذ ${esc(fmtDate(result.cycleStart))})` : ''}</td><td class="r-num" style="color:#16683a">− ${fmt(result.paidInCycle || 0)} ج.م</td></tr>
+      <tr class="row-strong"><td>المتبقي عليك للسداد</td><td class="r-num">${fmt(result.remaining || 0)} ج.م</td></tr>
     </tbody></table>
     ${anchorNote ? `<div class="note">${anchorNote}</div>` : ''}
   </section>
@@ -177,7 +190,24 @@ h2{font-size:15px;color:#1A6B3C;border-right:4px solid #C9A84C;padding-right:10p
       <div class="zf-label">الزكاة المستحقة</div>
       <div class="zf-amount">${fmt(result.zakatDue)} <small>ج.م</small></div>
     </div>
+    ${(result.paidInCycle || 0) > 0 ? `<div class="zf-box">
+      <div class="zf-label">المدفوع</div>
+      <div class="zf-amount" style="color:#E8D08A;font-size:22px">− ${fmt(result.paidInCycle)}</div>
+    </div>
+    <div class="zf-box">
+      <div class="zf-label">المتبقي</div>
+      <div class="zf-amount" style="color:#F59E0B">${fmt(result.remaining || 0)} <small>ج.م</small></div>
+    </div>` : ''}
   </section>
+
+  ${paidRows ? `<section>
+    <h2>الزكاة المدفوعة خلال الحول الحالي</h2>
+    <table class="tbl">
+      <thead><tr><th>المصرف / المستفيد</th><th>التاريخ</th><th>ملاحظات</th><th>المبلغ (ج.م)</th></tr></thead>
+      <tbody>${paidRows}</tbody>
+      <tfoot><tr><td colspan="3">إجمالي المدفوع</td><td class="r-num">${fmt(result.paidInCycle || 0)}</td></tr></tfoot>
+    </table>
+  </section>` : ''}
 
   <footer class="rfoot">
     <p>هذا التقرير لأغراض الاسترشاد فقط. للتأكد من الأحكام الشرعية يُرجى مراجعة عالم أو جهة فتوى مختصة.</p>

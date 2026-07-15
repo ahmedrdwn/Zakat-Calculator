@@ -1,17 +1,21 @@
 import { useState } from 'preact/hooks';
 import { settingsSig, updateSettings, activeLots } from '../state/store.js';
 import { computeZakat, nisabEGP } from '../zakat/engine.js';
-import { assetType } from '../models/index.js';
+import { assetType, masraf } from '../models/index.js';
 import { fmt, fmtDate, daysSince, todayISO } from '../utils/index.js';
-import { Banner, EmptyState } from '../components/ui.jsx';
+import { Banner, EmptyState, ConfirmButton } from '../components/ui.jsx';
+import { TransactionForm } from '../components/TransactionForm.jsx';
+import { deleteTransaction } from '../state/store.js';
 
 export function Zakat() {
   const s = settingsSig.value;
   const [mode, setMode] = useState(s.hawlMode || 'fifo');
+  const [payOpen, setPayOpen] = useState(false);
   const nisab = nisabEGP();
   const result = computeZakat(mode);
 
   const setModePersist = m => { setMode(m); updateSettings({ hawlMode: m }); };
+  const paidSorted = [...(result.paidTxs || [])].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 
   return (
     <>
@@ -33,7 +37,7 @@ export function Zakat() {
 
       <Banner tone="info">
         {mode === 'fifo'
-          ? <>«FIFO» — يحسب الزكاة فقط على الأصول التي مرّ عليها {s.hawlDays || 365} يوم أو أكثر (كل مبلغ يحسب حوله من تاريخ اقتنائه).</>
+          ? <>«FIFO» — يحسب الزكاة فقط على الأصول التي مرّ عليها {s.hawlDays || 365} يوم أو أكثر <strong>(لكل مبلغ حوله من تاريخ اقتنائه)</strong>.</>
           : <>«الوعاء المُثبت» — تحدد أنت تاريخ الحول الأصلي (حين بلغ مالك النصاب أول مرة)، ثم عند كل ذكرى سنوية نحسب زكاة الوعاء الكامل الحاضر عندها.</>}
       </Banner>
 
@@ -44,34 +48,41 @@ export function Zakat() {
           <div class="val">{fmt(nisab)} <small>ج.م</small></div>
           <div class="sub">85 جم ذهب</div>
         </div>
-        {mode === 'fifo' ? <>
+        {mode === 'fifo' ? (
           <div class="stat">
             <div class="lbl">الوعاء المؤهل (أتمّ الحول)</div>
             <div class="val emerald">{fmt(result.agedBase)} <small>ج.م</small></div>
-            <div class="sub">{result.contributing.length} بند</div>
+            <div class="sub">{result.contributing.length} بند · لم يُتمّ: {fmt(result.youngPool)} ج.م</div>
           </div>
-          <div class="stat">
-            <div class="lbl">لم يُتمّ الحول بعد</div>
-            <div class="val amber">{fmt(result.youngPool)} <small>ج.م</small></div>
-            <div class="sub">{result.skipped.length} بند</div>
-          </div>
-        </> : <>
+        ) : (
           <div class="stat">
             <div class="lbl">الوعاء الزكوي الحالي</div>
             <div class="val">{fmt(result.pool)} <small>ج.م</small></div>
-            <div class="sub">{result.contributing.length} بند</div>
-          </div>
-          <div class="stat">
-            <div class="lbl">تاريخ الحول</div>
-            <div class="val" style="font-size:16px">{result.anchor ? fmtDate(result.anchor) : '—'}</div>
             <div class="sub">{result.anniversary ? `الذكرى: ${fmtDate(result.anniversary)}` : 'اضبط تاريخ الحول أدناه'}</div>
           </div>
-        </>}
+        )}
         <div class="stat">
           <div class="lbl">الزكاة المستحقة</div>
           <div class="val gold">{fmt(result.zakatDue)} <small>ج.م</small></div>
           <div class="sub">{result.reachedNisab ? '✓ الزكاة واجبة' : '— غير واجبة الآن'}</div>
         </div>
+        <div class="stat">
+          <div class="lbl">المدفوع من الزكاة</div>
+          <div class="val emerald">{fmt(result.paidInCycle || 0)} <small>ج.م</small></div>
+          <div class="sub">{(result.paidTxs || []).length} دفعة {result.cycleStart ? `منذ ${fmtDate(result.cycleStart)}` : ''}</div>
+        </div>
+        <div class="stat">
+          <div class="lbl">المتبقي عليك</div>
+          <div class="val" style={`color:${result.remaining > 0 ? 'var(--amber)' : 'var(--emerald-l)'}`}>{fmt(result.remaining || 0)} <small>ج.م</small></div>
+          <div class="sub">{result.remaining <= 0 && result.zakatDue > 0 ? '✓ سُدّدت الزكاة' : (result.zakatDue > 0 ? 'يتبقى للسداد' : '—')}</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-gold" onClick={() => setPayOpen(true)}>🤲 سجّل دفعة زكاة</button>
+        <span style="align-self:center;font-size:12.5px;color:var(--text-dim)">
+          الدفعات المسجَّلة تُخصم من إجمالي المستحق وتُحفظ في سجل الحركات.
+        </span>
       </div>
 
       {mode === 'pool' && (
@@ -148,6 +159,39 @@ export function Zakat() {
           </div>
         </div>
       )}
+
+      {/* Zakat payments */}
+      <div class="card">
+        <div class="card-hd">
+          <h3><span class="icon">🤲</span>سجل الزكاة المدفوعة</h3>
+          <span class="badge badge-emerald">{fmt(result.paidInCycle || 0)} ج.م · {paidSorted.length} دفعة</span>
+        </div>
+        <div class="card-body">
+          {paidSorted.length === 0
+            ? <EmptyState icon="🕯️" title="لا دفعات زكاة مسجَّلة"
+                message="سجّل كل دفعة زكاة تُخرجها بتاريخها ومصرفها الشرعي، وسنخصمها تلقائياً من المتبقي عليك."
+                action={<button class="btn btn-gold" onClick={() => setPayOpen(true)}>➕ سجّل دفعة</button>} />
+            : paidSorted.map(t => {
+                const m = masraf(t.masrafId);
+                return (
+                  <div class="row" key={t.id}>
+                    <div class="rmain">
+                      <div class="rname">{m ? `${m.icon} ${m.label}` : '🤲 زكاة'}{t.recipient ? ` — ${t.recipient}` : ''}</div>
+                      <div class="rmeta">{fmtDate(t.at)}{t.notes ? ' · ' + t.notes : ''}{t.ref ? ` · مرجع: ${t.ref}` : ''}</div>
+                    </div>
+                    <div class="rright">
+                      <div class="rval emerald">{fmt(t.amount)} ج.م</div>
+                    </div>
+                    <div class="ractions">
+                      <ConfirmButton onConfirm={() => deleteTransaction(t.id)} />
+                    </div>
+                  </div>
+                );
+              })}
+        </div>
+      </div>
+
+      <TransactionForm open={payOpen} onClose={() => setPayOpen(false)} defaultKind="zakat_paid" />
     </>
   );
 }

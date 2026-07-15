@@ -1,5 +1,12 @@
 import { uid, nowISO, todayISO } from '../utils/index.js';
 
+// Merge patch into defaults, ignoring undefined values so factories can supply real defaults.
+function withDefaults(defaults, patch = {}) {
+  const out = { ...defaults };
+  for (const k in patch) if (patch[k] !== undefined) out[k] = patch[k];
+  return out;
+}
+
 // ── Account kinds ─────────────────────────────────────────
 // bank      → traditional bank account
 // cash      → physical cash on hand
@@ -33,6 +40,19 @@ export const ASSET_TYPES = [
 ];
 export const assetType = id => ASSET_TYPES.find(t => t.id === id) || ASSET_TYPES[0];
 
+// ── Masaref (eight lawful zakat recipients) ───────────────
+export const MASAREF = [
+  { id: 'fuqara',    label: 'الفقراء',        def: 'الذين لا يجدون ما يكفيهم', icon: '🤲' },
+  { id: 'masakin',   label: 'المساكين',       def: 'الذين يجدون بعض الكفاية',   icon: '🏠' },
+  { id: 'amilin',    label: 'العاملين عليها', def: 'جامعو الزكاة وموزعوها',      icon: '📋' },
+  { id: 'muallafa',  label: 'المؤلفة قلوبهم', def: 'لتأليف القلوب على الإسلام',  icon: '💚' },
+  { id: 'riqab',     label: 'في الرقاب',      def: 'تحرير الأرقاء',              icon: '⛓' },
+  { id: 'gharimin',  label: 'الغارمين',       def: 'المدينون العاجزون عن السداد', icon: '💸' },
+  { id: 'sabilillah',label: 'في سبيل الله',  def: 'الأعمال الخيرية',            icon: '🌟' },
+  { id: 'ibnussabil',label: 'ابن السبيل',    def: 'المسافر المنقطع عن ماله',    icon: '🧳' },
+];
+export const masraf = id => MASAREF.find(m => m.id === id) || null;
+
 // ── Lot purpose (informs default zakat treatment) ─────────
 // zakat  → included in zakat base (default)
 // wear   → jewelry meant to be worn (not zakated per some views — user can override)
@@ -64,7 +84,7 @@ export const txKind = id => TX_KINDS.find(k => k.id === id) || TX_KINDS[0];
 
 // ── Factories ─────────────────────────────────────────────
 export function newAccount(patch = {}) {
-  return {
+  return withDefaults({
     id: uid(),
     name: '',
     kind: 'bank',
@@ -74,8 +94,7 @@ export function newAccount(patch = {}) {
     notes: '',
     createdAt: nowISO(),
     updatedAt: nowISO(),
-    ...patch,
-  };
+  }, patch);
 }
 
 /**
@@ -90,7 +109,7 @@ export function newAccount(patch = {}) {
  * currentValue: last computed market value in EGP-equivalent
  */
 export function newLot(patch = {}) {
-  return {
+  return withDefaults({
     id: uid(),
     accountId: '',
     assetType: 'cash',
@@ -110,12 +129,11 @@ export function newLot(patch = {}) {
     notes: '',
     createdAt: nowISO(),
     updatedAt: nowISO(),
-    ...patch,
-  };
+  }, patch);
 }
 
 export function newTransaction(patch = {}) {
-  return {
+  return withDefaults({
     id: uid(),
     at: todayISO(),
     kind: 'deposit',
@@ -127,10 +145,11 @@ export function newTransaction(patch = {}) {
     category: '',
     notes: '',
     ref: '',
-    consumed: [],   // for FIFO: [{lotId, amount}]
+    consumed: [],       // for FIFO: [{lotId, amount}]
+    masrafId: null,     // for zakat_paid: one of MASAREF ids
+    recipient: '',      // for zakat_paid: beneficiary name / description
     createdAt: nowISO(),
-    ...patch,
-  };
+  }, patch);
 }
 
 // Effective zakatable flag: user override wins; else purpose + assetType default

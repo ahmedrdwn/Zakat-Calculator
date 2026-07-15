@@ -3,6 +3,7 @@ import { Modal, Field } from './ui.jsx';
 import { activeAccounts, activeLots, accountBalance,
   txDeposit, txIncome, txWithdraw, txExpense, txTransfer, txSell, txRevalue, txZakatPaid
 } from '../state/store.js';
+import { MASAREF } from '../models/index.js';
 import { fmt, todayISO } from '../utils/index.js';
 
 const KINDS = [
@@ -28,6 +29,8 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
     category: '',
     notes: '',
     ref: '',
+    masrafId: '',
+    recipient: '',
   });
   const [error, setError] = useState('');
 
@@ -64,6 +67,7 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
   const isXfer = form.kind === 'transfer';
   const isSell = form.kind === 'sell';
   const isReval = form.kind === 'revalue';
+  const isZakat = form.kind === 'zakat_paid';
 
   return (
     <Modal
@@ -164,6 +168,20 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
           </Field>
           <Field label="سعر الوحدة الجديد (ج.م)">
             <div class="iw"><input type="number" step="0.01" min="0" value={form.newUnitPrice} onInput={patch('newUnitPrice')} /><span class="unit">ج.م</span></div>
+          </Field>
+        </div>
+      )}
+
+      {isZakat && (
+        <div class="frow">
+          <Field label="المصرف (وجه الصرف)" hint="أحد المصارف الشرعية الثمانية">
+            <select value={form.masrafId} onChange={patch('masrafId')}>
+              <option value="">— اختر —</option>
+              {MASAREF.map(m => <option value={m.id}>{m.icon} {m.label}</option>)}
+            </select>
+          </Field>
+          <Field label="اسم المستفيد">
+            <input type="text" value={form.recipient} onInput={patch('recipient')} placeholder="اختياري — اسم أو وصف" />
           </Field>
         </div>
       )}

@@ -1,8 +1,34 @@
-import { settingsSig, activeLots, zakatableLots } from '../state/store.js';
+import { settingsSig, activeLots, zakatableLots, transactionsSig } from '../state/store.js';
 import { isLotZakatable, lotValueEGP } from '../models/index.js';
 import { sum, isAged, daysSince, addDays } from '../utils/index.js';
 
 const ZAKAT_RATE = 0.025;
+
+// Zakat payments (kind='zakat_paid') since a given ISO date (inclusive)
+export function zakatPaidSince(sinceISO) {
+  const bound = sinceISO || '';
+  return transactionsSig.value
+    .filter(t => t.kind === 'zakat_paid' && (!bound || (t.at || '') >= bound))
+    .map(t => ({ ...t }));
+}
+
+// Start of the current zakat cycle, per mode
+export function cycleStart(mode) {
+  const s = settingsSig.value;
+  mode = mode || s.hawlMode || 'fifo';
+  if (mode === 'pool') {
+    if (!s.poolHawlAnchor) return '';
+    // last anniversary <= today
+    let anchor = s.poolHawlAnchor;
+    const hawl = s.hawlDays || 365;
+    let a = anchor;
+    // roll forward to the most recent anniversary that has already passed
+    while (daysSince(addDays(a, hawl)) >= 0) a = addDays(a, hawl);
+    return a;
+  }
+  // FIFO: rolling 12 months back from today
+  return addDays(new Date().toISOString().slice(0,10), -(s.hawlDays || 365));
+}
 
 // Nisab (gold-based). Returns 0 if gold price not set.
 export function nisabEGP() {
@@ -81,7 +107,12 @@ export function computePool() {
 
 export function computeZakat(mode) {
   mode = mode || settingsSig.value.hawlMode || 'fifo';
-  return mode === 'pool' ? computePool() : computeFIFO();
+  const base = mode === 'pool' ? computePool() : computeFIFO();
+  const start = cycleStart(mode);
+  const paidTxs = zakatPaidSince(start);
+  const paidInCycle = sum(paidTxs.map(t => t.amount));
+  const remaining = Math.max(0, (base.zakatDue || 0) - paidInCycle);
+  return { ...base, cycleStart: start, paidTxs, paidInCycle, remaining };
 }
 
 // Aggregate value by asset type for the contributing set

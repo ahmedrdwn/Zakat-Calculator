@@ -1,5 +1,5 @@
 import { fmt, fmtDate } from '../utils/index.js';
-import { assetType } from '../models/index.js';
+import { assetType, masraf } from '../models/index.js';
 import { settingsSig, accountsSig, transactionsSig, activeLots } from '../state/store.js';
 
 // Lazy-load SheetJS from CDN on first use — keeps bundle small.
@@ -44,6 +44,8 @@ export async function downloadExcel(result) {
       ...(result.mode === 'fifo' ? [['مبالغ لم يمر عليها الحول (ج.م)', +(result.youngPool || 0).toFixed(2)]] : []),
       ['بلوغ النصاب', result.reachedNisab ? 'نعم — واجبة' : 'لا — غير واجبة'],
       ['الزكاة المستحقة (ج.م)', +result.zakatDue.toFixed(2)],
+      ['الزكاة المدفوعة خلال الحول (ج.م)', +(result.paidInCycle || 0).toFixed(2)],
+      ['المتبقي عليك (ج.م)', +(result.remaining || 0).toFixed(2)],
       [],
       ['البنود المدرجة'],
       ['البند','التفاصيل','الحساب','تاريخ الاقتناء','القيمة (ج.م)','الزكاة 2.5%'],
@@ -64,6 +66,18 @@ export async function downloadExcel(result) {
       aoa.push([], ['بنود مؤجلة — لم يُتمّ الحول']);
       aoa.push(['البند','تاريخ الاقتناء','باقٍ على الحول (يوم)','القيمة (ج.م)']);
       result.skipped.forEach(l => aoa.push([l.label || assetType(l.assetType).label, l.acquiredAt, l.daysToHawl, +l.valueEGP.toFixed(2)]));
+    }
+    if (result.paidTxs && result.paidTxs.length) {
+      aoa.push([], ['الزكاة المدفوعة خلال الحول الحالي']);
+      aoa.push(['التاريخ','المصرف','المستفيد','ملاحظات','المرجع','المبلغ (ج.م)']);
+      result.paidTxs
+        .slice()
+        .sort((a,b) => (a.at||'').localeCompare(b.at||''))
+        .forEach(t => {
+          const m = masraf(t.masrafId);
+          aoa.push([t.at || '', m ? m.label : '', t.recipient || '', t.notes || '', t.ref || '', +(t.amount || 0).toFixed(2)]);
+        });
+      aoa.push(['','','','','الإجمالي', +(result.paidInCycle || 0).toFixed(2)]);
     }
     const ws1 = XLSX.utils.aoa_to_sheet(aoa);
     ws1['!cols'] = [{ wch: 40 }, { wch: 30 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 16 }];

@@ -173,13 +173,15 @@ function fifoConsume(accountId, amount, at) {
 }
 
 // Withdraw / Expense: FIFO consume from fromAccountId
-export function txWithdraw({ fromAccountId, amount, at, notes, category, ref, kind = 'withdraw' }) {
+export function txWithdraw({ fromAccountId, amount, at, notes, category, ref, masrafId, recipient, kind = 'withdraw' }) {
   amount = Number(amount) || 0;
   if (amount <= 0) throw new Error('أدخل مبلغاً موجباً');
   if (!fromAccountId) throw new Error('اختر الحساب المصدر');
   const consumed = fifoConsume(fromAccountId, amount, at);
   const tx = newTransaction({
     kind, at, fromAccountId, amount, notes, category, ref, consumed,
+    masrafId: masrafId || null,
+    recipient: recipient || '',
   });
   transactionsSig.value = [...transactionsSig.value, tx];
   return tx;
