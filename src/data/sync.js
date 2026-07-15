@@ -5,11 +5,38 @@ import { accountsSig, lotsSig, transactionsSig, settingsSig } from '../state/sto
 export const userSig = signal(null);            // Supabase user or null
 export const syncStatusSig = signal('idle');    // 'idle' | 'pulling' | 'pushing' | 'synced' | 'error' | 'offline'
 export const syncErrorSig = signal('');
+export const syncErrorDetailSig = signal(null); // richer diagnostic { message, code, hint }
 export const lastSyncedAtSig = signal(null);
 
 const TABLE = 'user_data';
 let pushScheduled = false;
 let installedAutoPush = false;
+
+// Decode common Postgres/PostgREST errors into an actionable Arabic hint.
+function explainError(err) {
+  const code = err?.code || '';
+  const msg = err?.message || String(err);
+  let hint = null;
+  if (code === '42P01' || /relation .* does not exist/i.test(msg) || /user_data/i.test(msg) && /not.*exist/i.test(msg)) {
+    hint = 'جدول user_data غير موجود في مشروع Supabase. شغّل سكربت الإعداد من ملف SUPABASE_SETUP.md لإنشائه.';
+  } else if (code === '42501' || /permission denied/i.test(msg) || /row-level security/i.test(msg) || /RLS/i.test(msg)) {
+    hint = 'سياسة RLS تمنع الوصول. تأكد من تفعيل RLS وإضافة السياسات الأربع (own_row_read/insert/update/delete) في Supabase.';
+  } else if (code === 'PGRST301' || /JWT/i.test(msg)) {
+    hint = 'انتهت صلاحية جلسة الدخول. سجّل الخروج ثم الدخول من جديد.';
+  } else if (/Failed to fetch/i.test(msg) || /NetworkError/i.test(msg)) {
+    hint = 'تعذّر الاتصال بخوادم Supabase. تحقّق من اتصال الإنترنت وحاول مرة أخرى.';
+  }
+  return { message: msg, code, hint };
+}
+
+function reportError(where, err) {
+  const detail = explainError(err);
+  syncStatusSig.value = 'error';
+  syncErrorSig.value = detail.hint ? `${detail.hint} (${detail.message})` : detail.message;
+  syncErrorDetailSig.value = { where, ...detail, raw: err };
+  // eslint-disable-next-line no-console
+  console.error(`[sync:${where}]`, err, '→', detail);
+}
 
 // Pull the user's row and replace local state
 export async function pullFromCloud() {
@@ -32,8 +59,7 @@ export async function pullFromCloud() {
     }
     syncStatusSig.value = 'synced';
   } catch (e) {
-    syncStatusSig.value = 'error';
-    syncErrorSig.value = e.message || String(e);
+    reportError('pull', e);
   }
 }
 
@@ -56,8 +82,7 @@ export async function pushToCloud() {
     lastSyncedAtSig.value = payload.updated_at;
     syncStatusSig.value = 'synced';
   } catch (e) {
-    syncStatusSig.value = 'error';
-    syncErrorSig.value = e.message || String(e);
+    reportError('push', e);
   }
 }
 
@@ -109,8 +134,7 @@ async function firstSync() {
     else await pullFromCloud();
     installAutoPush();
   } catch (e) {
-    syncStatusSig.value = 'error';
-    syncErrorSig.value = e.message || String(e);
+    reportError('firstSync', e);
   }
 }
 
