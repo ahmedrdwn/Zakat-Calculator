@@ -2,7 +2,8 @@ import { useState, useMemo } from 'preact/hooks';
 import { Modal, Field } from './ui.jsx';
 import { ASSET_TYPES, LOT_PURPOSES, currencyByCode } from '../models/index.js';
 import { addLot, updateLot, activeAccounts, settingsSig } from '../state/store.js';
-import { todayISO } from '../utils/index.js';
+import { goldEGPPerGram, silverEGPPerGram } from '../state/metals.js';
+import { todayISO, fmt } from '../utils/index.js';
 
 export function LotForm({ open, onClose, existing, defaultAccountId, defaultAssetType }) {
   const isEdit = !!existing;
@@ -101,29 +102,45 @@ export function LotForm({ open, onClose, existing, defaultAccountId, defaultAsse
           </div>
         );
       })()}
-      {(at.id === 'gold' || at.id === 'silver') && (
-        <div class="frow">
-          <Field label="الوزن (جرام)">
-            <input type="number" step="0.01" min="0" value={form.weight} onInput={patch('weight')} />
-          </Field>
-          {at.id === 'gold' && (
-            <Field label="العيار">
-              <select value={form.karat} onChange={patch('karat')}>
-                <option value="24">24</option><option value="22">22</option>
-                <option value="21">21</option><option value="18">18</option>
-              </select>
+      {(at.id === 'gold' || at.id === 'silver') && (() => {
+        // Live spot in EGP/gram, adjusted for karat on gold.
+        const gLive = goldEGPPerGram.value;
+        const sLive = silverEGPPerGram.value;
+        const karat = Number(form.karat) || 24;
+        const goldLiveKarat = gLive > 0 ? gLive * karat / 24 : 0;
+        const livePerGram = at.id === 'gold' ? goldLiveKarat : sLive;
+        const fallback = at.id === 'gold' ? (s.goldPricePerGram || 0) : (s.silverPricePerGram || 0);
+        const suggested = livePerGram || fallback;
+        return (
+          <div class="frow">
+            <Field label="الوزن (جرام)">
+              <input type="number" step="0.01" min="0" value={form.weight} onInput={patch('weight')} />
             </Field>
-          )}
-          <Field label="سعر الجرام (ج.م)" hint={at.id === 'gold' ? `مرجعي: ${s.goldPricePerGram || '—'}` : `مرجعي: ${s.silverPricePerGram || '—'}`}>
-            <div class="iw">
-              <input type="number" step="0.01" min="0"
-                value={form.unitPrice || (at.id === 'gold' ? s.goldPricePerGram : s.silverPricePerGram) || 0}
-                onInput={patch('unitPrice')} />
-              <span class="unit">ج.م</span>
-            </div>
-          </Field>
-        </div>
-      )}
+            {at.id === 'gold' && (
+              <Field label="العيار">
+                <select value={form.karat} onChange={patch('karat')}>
+                  <option value="24">24</option><option value="22">22</option>
+                  <option value="21">21</option><option value="18">18</option>
+                </select>
+              </Field>
+            )}
+            <Field
+              label="سعر الجرام (ج.م)"
+              hint={livePerGram > 0
+                ? `🔴 مباشر: ${fmt(livePerGram)} ج.م/جرام${at.id === 'gold' ? ` — عيار ${karat}` : ''}`
+                : (fallback > 0 ? `يدوي: ${fmt(fallback)}` : 'أدخل سعر الجرام أو اترك للسعر اللحظي')}
+            >
+              <div class="iw">
+                <input type="number" step="0.01" min="0"
+                  value={form.unitPrice || suggested || 0}
+                  onInput={patch('unitPrice')}
+                  placeholder={suggested > 0 ? String(Math.round(suggested)) : '0'} />
+                <span class="unit">ج.م</span>
+              </div>
+            </Field>
+          </div>
+        );
+      })()}
       {(at.id === 'stock' || at.id === 'fund' || at.id === 'inventory') && (
         <div class="frow">
           <Field label={at.id === 'stock' ? 'رمز السهم' : at.id === 'fund' ? 'اسم الصندوق' : 'اسم البضاعة'}>

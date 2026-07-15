@@ -1,6 +1,7 @@
 import { effect } from '@preact/signals';
 import { accountsSig, lotsSig, transactionsSig, settingsSig } from '../state/store.js';
 import { fxRatesSig } from '../state/fx.js';
+import { metalPricesSig } from '../state/metals.js';
 
 const KEY = 'personalBank.v1';
 const SCHEMA_VERSION = 1;
@@ -16,6 +17,7 @@ export function hydrate() {
     if (parsed.transactions) transactionsSig.value = parsed.transactions;
     if (parsed.settings) settingsSig.value = { ...settingsSig.value, ...parsed.settings };
     if (parsed.fxRates) fxRatesSig.value = { ...fxRatesSig.value, ...parsed.fxRates };
+    if (parsed.metalPrices) metalPricesSig.value = { ...metalPricesSig.value, ...parsed.metalPrices };
   } catch (e) {
     console.warn('hydrate failed:', e);
   }
@@ -46,6 +48,7 @@ export function snapshot() {
     transactions: transactionsSig.value,
     settings: settingsSig.value,
     fxRates: fxRatesSig.value,
+    metalPrices: metalPricesSig.value,
   };
 }
 

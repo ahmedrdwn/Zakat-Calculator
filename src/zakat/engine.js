@@ -1,10 +1,17 @@
 import { settingsSig, activeLots, zakatableLots, transactionsSig } from '../state/store.js';
 import { fxRatesSig } from '../state/fx.js';
+import { goldEGPPerGram } from '../state/metals.js';
 import { isLotZakatable, lotValueEGP } from '../models/index.js';
 import { sum, isAged, daysSince, addDays } from '../utils/index.js';
 
 const rates = () => fxRatesSig.value.rates || {};
 const valueEGP = l => lotValueEGP(l, rates());
+
+// Effective gold price per gram: user's manual override wins, else live spot.
+export function goldPricePerGram() {
+  const manual = Number(settingsSig.value.goldPricePerGram) || 0;
+  return manual || goldEGPPerGram.value || 0;
+}
 
 const ZAKAT_RATE = 0.025;
 
@@ -37,7 +44,7 @@ export function cycleStart(mode) {
 // Nisab (gold-based). Returns 0 if gold price not set.
 export function nisabEGP() {
   const s = settingsSig.value;
-  return (Number(s.goldPricePerGram) || 0) * (Number(s.nisabGoldGrams) || 85);
+  return goldPricePerGram() * (Number(s.nisabGoldGrams) || 85);
 }
 
 /**
