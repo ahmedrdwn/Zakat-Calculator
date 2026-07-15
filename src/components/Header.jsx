@@ -42,8 +42,14 @@ export function Header() {
         <div class="hdr-spacer" />
         <div class="hdr-actions">
           {statusLabel && <span class="badge badge-muted" style="align-self:center">{statusLabel}</span>}
-          {supabaseEnabled && !user && (
-            <button class="btn btn-gold btn-sm" onClick={() => setAuthOpen(true)}>🔐 تسجيل الدخول</button>
+          {!user && (
+            <button
+              class={'btn btn-sm ' + (supabaseEnabled ? 'btn-gold' : 'btn-ghost')}
+              onClick={() => setAuthOpen(true)}
+              title={supabaseEnabled ? 'تسجيل الدخول' : 'المزامنة السحابية غير مُفعّلة — انقر لمعرفة السبب'}
+            >
+              🔐 {supabaseEnabled ? 'تسجيل الدخول' : 'مزامنة سحابية'}
+            </button>
           )}
           {user && (
             <div style="position:relative">
