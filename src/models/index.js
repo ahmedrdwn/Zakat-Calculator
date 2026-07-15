@@ -7,6 +7,35 @@ function withDefaults(defaults, patch = {}) {
   return out;
 }
 
+// ── Currencies ────────────────────────────────────────────
+// Base is EGP; all foreign amounts convert to EGP-equivalent for zakat.
+export const CURRENCIES = [
+  { code: 'EGP', label: 'الجنيه المصري',    symbol: 'ج.م' },
+  { code: 'USD', label: 'الدولار الأمريكي',  symbol: '$'   },
+  { code: 'CAD', label: 'الدولار الكندي',    symbol: 'C$'  },
+  { code: 'EUR', label: 'اليورو',            symbol: '€'   },
+  { code: 'GBP', label: 'الجنيه الاسترليني', symbol: '£'   },
+  { code: 'AUD', label: 'الدولار الأسترالي', symbol: 'A$'  },
+  { code: 'CHF', label: 'الفرنك السويسري',   symbol: 'Fr'  },
+  { code: 'JPY', label: 'الين الياباني',     symbol: '¥'   },
+  { code: 'CNY', label: 'اليوان الصيني',     symbol: '¥'   },
+  { code: 'SAR', label: 'الريال السعودي',    symbol: '﷼'   },
+  { code: 'AED', label: 'الدرهم الإماراتي',  symbol: 'د.إ' },
+  { code: 'KWD', label: 'الدينار الكويتي',   symbol: 'د.ك' },
+  { code: 'QAR', label: 'الريال القطري',     symbol: 'ر.ق' },
+  { code: 'BHD', label: 'الدينار البحريني',  symbol: 'د.ب' },
+  { code: 'OMR', label: 'الريال العماني',    symbol: 'ر.ع' },
+  { code: 'JOD', label: 'الدينار الأردني',   symbol: 'د.أ' },
+  { code: 'LBP', label: 'الليرة اللبنانية',  symbol: 'ل.ل' },
+  { code: 'TRY', label: 'الليرة التركية',    symbol: '₺'   },
+  { code: 'INR', label: 'الروبية الهندية',   symbol: '₹'   },
+  { code: 'PKR', label: 'الروبية الباكستانية', symbol: '₨' },
+  { code: 'MYR', label: 'الرينغيت الماليزي',  symbol: 'RM' },
+  { code: 'IDR', label: 'الروبية الإندونيسية', symbol: 'Rp'},
+];
+export const currencyByCode = code => CURRENCIES.find(c => c.code === code) || CURRENCIES[0];
+export const currencyLabel = code => (currencyByCode(code).label + ' (' + code + ')');
+
 // ── Account kinds ─────────────────────────────────────────
 // bank      → traditional bank account
 // cash      → physical cash on hand
@@ -113,6 +142,7 @@ export function newLot(patch = {}) {
     id: uid(),
     accountId: '',
     assetType: 'cash',
+    currency: 'EGP',   // for cash / receivable lots; ignored for gold/silver/stock (priced in EGP)
     acquiredAt: todayISO(),
     amount: 0,
     remaining: 0,
@@ -161,8 +191,8 @@ export function isLotZakatable(lot) {
   return t.zakatDefault;
 }
 
-// Current EGP-equivalent value of a lot (uses `remaining` for cash to reflect FIFO)
-export function lotValueEGP(lot) {
+// Native (own-currency) value of a cash/receivable lot; EGP value for other assets.
+export function lotNativeValue(lot) {
   if (lot.disposedAt) return 0;
   switch (lot.assetType) {
     case 'cash':
@@ -181,4 +211,19 @@ export function lotValueEGP(lot) {
     default:
       return Number(lot.currentValue) || 0;
   }
+}
+
+// Convert to EGP using a USD-based rates map: rates[X] = "1 USD in X units".
+// If the lot is cash/receivable in a non-EGP currency, convert via USD.
+// Non-cash lots are already EGP-native (unitPrice is EGP).
+export function lotValueEGP(lot, rates) {
+  const v = lotNativeValue(lot);
+  if (!v) return 0;
+  const t = lot.assetType;
+  if (t !== 'cash' && t !== 'receivable') return v;
+  const cur = lot.currency || 'EGP';
+  if (cur === 'EGP') return v;
+  if (!rates || !rates.EGP || !rates[cur]) return 0;
+  // amount in `cur` → USD (÷ rates[cur]) → EGP (× rates.EGP)
+  return v * rates.EGP / rates[cur];
 }

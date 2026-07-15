@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Modal, Field } from './ui.jsx';
-import { activeAccounts, activeLots, accountBalance,
+import { activeAccounts, activeLots, accountBalance, accountNativeBalance,
   txDeposit, txIncome, txWithdraw, txExpense, txTransfer, txSell, txRevalue, txZakatPaid
 } from '../state/store.js';
-import { MASAREF } from '../models/index.js';
+import { MASAREF, currencyByCode } from '../models/index.js';
 import { fmt, todayISO } from '../utils/index.js';
 
 const KINDS = [
@@ -68,6 +68,9 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
   const isSell = form.kind === 'sell';
   const isReval = form.kind === 'revalue';
   const isZakat = form.kind === 'zakat_paid';
+  const activeAccountId = isDep ? form.toAccountId : (isXfer || isSell ? form.fromAccountId : form.fromAccountId);
+  const activeAcctCurrency = accts.find(a => a.id === activeAccountId)?.currency || 'EGP';
+  const acur = currencyByCode(activeAcctCurrency);
 
   return (
     <Modal
@@ -95,25 +98,25 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
           <Field label="الحساب المستقبل">
             <select value={form.toAccountId} onChange={patch('toAccountId')}>
               <option value="">— اختر —</option>
-              {accts.map(a => <option value={a.id}>{a.name}</option>)}
+              {accts.map(a => <option value={a.id}>{a.name} ({a.currency})</option>)}
             </select>
           </Field>
-          <Field label="المبلغ (ج.م)">
-            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">ج.م</span></div>
+          <Field label={`المبلغ (${acur.code})`}>
+            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">{acur.symbol}</span></div>
           </Field>
         </div>
       )}
 
       {isOut && (
         <div class="frow">
-          <Field label="الحساب المصدر" hint={form.fromAccountId ? `الرصيد: ${fmt(accountBalance(form.fromAccountId))} ج.م` : ''}>
+          <Field label="الحساب المصدر" hint={form.fromAccountId ? `الرصيد: ${fmt(accountNativeBalance(form.fromAccountId))} ${acur.code}` : ''}>
             <select value={form.fromAccountId} onChange={patch('fromAccountId')}>
               <option value="">— اختر —</option>
-              {accts.map(a => <option value={a.id}>{a.name} — {fmt(accountBalance(a.id))} ج.م</option>)}
+              {accts.map(a => <option value={a.id}>{a.name} — {fmt(accountNativeBalance(a.id))} {a.currency}</option>)}
             </select>
           </Field>
-          <Field label="المبلغ (ج.م)">
-            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">ج.م</span></div>
+          <Field label={`المبلغ (${acur.code})`}>
+            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">{acur.symbol}</span></div>
           </Field>
         </div>
       )}
@@ -123,17 +126,18 @@ export function TransactionForm({ open, onClose, defaultKind, defaultAccountId }
           <Field label="من">
             <select value={form.fromAccountId} onChange={patch('fromAccountId')}>
               <option value="">— اختر —</option>
-              {accts.map(a => <option value={a.id}>{a.name} — {fmt(accountBalance(a.id))} ج.م</option>)}
+              {accts.map(a => <option value={a.id}>{a.name} — {fmt(accountNativeBalance(a.id))} {a.currency}</option>)}
             </select>
           </Field>
-          <Field label="إلى">
+          <Field label="إلى" hint="يجب أن يطابق عملة المصدر">
             <select value={form.toAccountId} onChange={patch('toAccountId')}>
               <option value="">— اختر —</option>
-              {accts.map(a => <option value={a.id}>{a.name}</option>)}
+              {accts.filter(a => !form.fromAccountId || a.currency === accts.find(x => x.id === form.fromAccountId)?.currency)
+                .map(a => <option value={a.id}>{a.name} ({a.currency})</option>)}
             </select>
           </Field>
-          <Field label="المبلغ (ج.م)">
-            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">ج.م</span></div>
+          <Field label={`المبلغ (${acur.code})`}>
+            <div class="iw"><input type="number" step="0.01" min="0" value={form.amount} onInput={patch('amount')} /><span class="unit">{acur.symbol}</span></div>
           </Field>
         </div>
       )}

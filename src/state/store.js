@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { newAccount, newLot, newTransaction, isLotZakatable, lotValueEGP } from '../models/index.js';
 import { nowISO, sum, isAged, uid } from '../utils/index.js';
+import { fxRatesSig } from './fx.js';
 
 // ── PRIMARY SIGNALS ──────────────────────────────────────
 export const accountsSig     = signal([]);
@@ -29,35 +30,49 @@ export const activeLots = computed(() =>
   lotsSig.value.filter(l => !l.disposedAt)
 );
 
+// Small helper — always uses current FX rates when converting non-EGP cash to EGP.
+const valueEGP = l => lotValueEGP(l, fxRatesSig.value.rates);
+
 export const netWorthEGP = computed(() =>
-  sum(activeLots.value.map(lotValueEGP))
+  sum(activeLots.value.map(valueEGP))
 );
 
 export const zakatableLots = computed(() =>
   activeLots.value.filter(isLotZakatable)
 );
 export const zakatableEGP = computed(() =>
-  sum(zakatableLots.value.map(lotValueEGP))
+  sum(zakatableLots.value.map(valueEGP))
 );
 
 export const byAssetType = computed(() => {
   const map = {};
   for (const l of activeLots.value) {
-    map[l.assetType] = (map[l.assetType] || 0) + lotValueEGP(l);
+    map[l.assetType] = (map[l.assetType] || 0) + valueEGP(l);
   }
   return map;
 });
 
 export const accountBalance = accountId => sum(
-  activeLots.value.filter(l => l.accountId === accountId).map(lotValueEGP)
+  activeLots.value.filter(l => l.accountId === accountId).map(valueEGP)
 );
+
+// Native-currency balance for a given account (no FX conversion).
+export const accountNativeBalance = accountId => {
+  const acct = accountsSig.value.find(a => a.id === accountId);
+  const cur = acct?.currency || 'EGP';
+  return sum(
+    activeLots.value
+      .filter(l => l.accountId === accountId && (l.assetType === 'cash' || l.assetType === 'receivable') && (l.currency || 'EGP') === cur)
+      .map(l => Number(l.remaining ?? l.amount) || 0)
+  );
+};
 
 // Aging bucket (in EGP) using zakatable lots only
 export const hawlAging = computed(() => {
   const days = settingsSig.value.hawlDays || 365;
   let aged = 0, young = 0;
   for (const l of zakatableLots.value) {
-    const v = lotValueEGP(l);
+    const v = valueEGP(l);
     if (isAged(l.acquiredAt, days)) aged += v;
     else young += v;
   }
@@ -112,14 +127,17 @@ export function deleteLot(id) {
 }
 
 // ── TRANSACTIONS (mutate lots) ───────────────────────────
-// Deposit: create a new cash lot in `toAccountId`
+// Deposit: create a new cash lot in `toAccountId` — inherits the account's currency.
 export function txDeposit({ toAccountId, amount, at, notes, category, ref }) {
   amount = Number(amount) || 0;
   if (amount <= 0) throw new Error('أدخل مبلغاً موجباً');
   if (!toAccountId) throw new Error('اختر الحساب المستقبل');
+  const acct = accountsSig.value.find(a => a.id === toAccountId);
+  const currency = acct?.currency || 'EGP';
   const lot = addLot({
     accountId: toAccountId,
     assetType: 'cash',
+    currency,
     acquiredAt: at || nowISO().slice(0, 10),
     amount, remaining: amount,
     costBasis: amount, currentValue: amount,
@@ -141,12 +159,16 @@ export function txIncome({ toAccountId, amount, at, notes, category, ref }) {
   return patched;
 }
 
-// FIFO consume `amount` of cash lots in `accountId`. Returns array [{lotId, consumed}].
-// Mutates lots in place (via updateLot). If not enough available, throws.
+// FIFO consume `amount` of cash lots in `accountId`, in the account's currency.
+// Returns array [{lotId, consumed}]. Mutates lots in place. Throws on insufficient balance.
 function fifoConsume(accountId, amount, at) {
   amount = Number(amount);
+  const acct = accountsSig.value.find(a => a.id === accountId);
+  const wantCurrency = acct?.currency || 'EGP';
   const eligible = activeLots.value
-    .filter(l => l.accountId === accountId && l.assetType === 'cash' && (l.remaining || 0) > 0)
+    .filter(l => l.accountId === accountId && l.assetType === 'cash'
+      && (l.remaining || 0) > 0
+      && (l.currency || 'EGP') === wantCurrency)
     .sort((a, b) => a.acquiredAt.localeCompare(b.acquiredAt));
   const available = sum(eligible.map(l => l.remaining));
   if (amount > available + 0.005) {
@@ -165,7 +187,7 @@ function fifoConsume(accountId, amount, at) {
     if (updated.remaining <= 0.0001) { updated.remaining = 0; updated.disposedAt = now; }
     updated.currentValue = updated.remaining;
     newLots[i] = updated;
-    consumed.push({ lotId: l.id, acquiredAt: l.acquiredAt, consumed: take });
+    consumed.push({ lotId: l.id, acquiredAt: l.acquiredAt, currency: l.currency || 'EGP', consumed: take });
     need -= take;
   }
   lotsSig.value = newLots;
@@ -189,18 +211,26 @@ export function txWithdraw({ fromAccountId, amount, at, notes, category, ref, ma
 export const txExpense = args => txWithdraw({ ...args, kind: 'expense' });
 export const txZakatPaid = args => txWithdraw({ ...args, kind: 'zakat_paid' });
 
-// Transfer: FIFO consume from source, create matching lots in destination preserving acquiredAt
+// Transfer: FIFO consume from source, create matching lots in destination preserving acquiredAt.
+// Source and destination must share the same currency (cross-currency transfers need explicit FX).
 export function txTransfer({ fromAccountId, toAccountId, amount, at, notes, ref }) {
   amount = Number(amount) || 0;
   if (amount <= 0) throw new Error('أدخل مبلغاً موجباً');
   if (!fromAccountId || !toAccountId) throw new Error('اختر الحساب المصدر والمستقبل');
   if (fromAccountId === toAccountId) throw new Error('الحسابان متطابقان');
+  const fromAcct = accountsSig.value.find(a => a.id === fromAccountId);
+  const toAcct = accountsSig.value.find(a => a.id === toAccountId);
+  const fromCur = fromAcct?.currency || 'EGP';
+  const toCur = toAcct?.currency || 'EGP';
+  if (fromCur !== toCur) {
+    throw new Error(`لا يمكن التحويل بين عملتين مختلفتين (${fromCur} → ${toCur}). سجّل سحباً من الأول وإيداعاً بالمبلغ المُحوَّل في الثاني.`);
+  }
   const consumed = fifoConsume(fromAccountId, amount, at);
-  // Create new cash lot(s) in destination preserving acquiredAt of each consumed portion
   const newLots = [];
   for (const c of consumed) {
     const lot = newLot({
       accountId: toAccountId, assetType: 'cash',
+      currency: toCur,
       acquiredAt: c.acquiredAt,
       amount: c.consumed, remaining: c.consumed,
       costBasis: c.consumed, currentValue: c.consumed,
@@ -240,7 +270,7 @@ export function txBuy({ fromAccountId, toAccountId, assetType, at, notes, ref, a
   return tx;
 }
 
-// Sell asset lot: dispose the lot, deposit proceeds into toAccountId
+// Sell asset lot: dispose the lot, deposit proceeds into toAccountId (in that account's currency)
 export function txSell({ fromLotId, toAccountId, proceeds, at, notes, ref }) {
   proceeds = Number(proceeds) || 0;
   if (proceeds <= 0) throw new Error('أدخل صافي البيع');
@@ -248,9 +278,12 @@ export function txSell({ fromLotId, toAccountId, proceeds, at, notes, ref }) {
   if (!lot) throw new Error('الأصل غير موجود');
   const now = at || nowISO();
   updateLot(fromLotId, { disposedAt: now, remaining: 0, currentValue: 0 });
+  const destAcctId = toAccountId || lot.accountId;
+  const destAcct = accountsSig.value.find(a => a.id === destAcctId);
   const proceedsLot = addLot({
-    accountId: toAccountId || lot.accountId,
+    accountId: destAcctId,
     assetType: 'cash',
+    currency: destAcct?.currency || 'EGP',
     acquiredAt: (at || nowISO()).slice(0, 10),
     amount: proceeds, remaining: proceeds,
     costBasis: proceeds, currentValue: proceeds,

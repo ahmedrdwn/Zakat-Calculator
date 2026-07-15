@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="البنك الشخصي — Personal Bank">
+  <defs>
+    <linearGradient id="pb-gold" x1="18%" y1="8%" x2="82%" y2="94%">
+      <stop offset="0%" stop-color="#F5E5B0"/>
+      <stop offset="32%" stop-color="#E8D08A"/>
+      <stop offset="58%" stop-color="#C9A84C"/>
+      <stop offset="88%" stop-color="#8B6914"/>
+    </linearGradient>
+    <linearGradient id="pb-shine" x1="50%" y1="0%" x2="50%" y2="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="pb-emerald" cx="50%" cy="42%" r="72%">
+      <stop offset="0%" stop-color="#1F7A46"/>
+      <stop offset="45%" stop-color="#0D3B22"/>
+      <stop offset="100%" stop-color="#06180E"/>
+    </radialGradient>
+    <mask id="pb-crescent" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <rect width="128" height="128" fill="black"/>
+      <circle cx="60" cy="66" r="19" fill="white"/>
+      <circle cx="69" cy="60" r="16" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- 8-pointed star (two overlapping squares) — one point per masraf -->
+  <g transform="translate(64 64)">
+    <rect x="-52" y="-52" width="104" height="104" fill="url(#pb-gold)" rx="3"/>
+    <rect x="-52" y="-52" width="104" height="104" fill="url(#pb-gold)" rx="3" transform="rotate(45)"/>
+    <rect x="-52" y="-52" width="104" height="104" fill="url(#pb-shine)" rx="3" opacity="0.55"/>
+    <rect x="-52" y="-52" width="104" height="104" fill="url(#pb-shine)" rx="3" opacity="0.45" transform="rotate(45)"/>
+  </g>
+
+  <!-- dark emerald disc with gold ring -->
+  <circle cx="64" cy="64" r="40" fill="url(#pb-emerald)"/>
+  <circle cx="64" cy="64" r="40" fill="none" stroke="#E8D08A" stroke-width="1.2" stroke-opacity="0.85"/>
+
+  <!-- crescent moon -->
+  <circle cx="60" cy="66" r="19" fill="url(#pb-gold)" mask="url(#pb-crescent)"/>
+
+  <!-- 5-point star in the crescent's opening -->
+  <g transform="translate(80 58)">
+    <polygon fill="#F5E5B0" points="0,-5 1.18,-1.62 4.76,-1.55 1.90,0.62 2.94,4.05 0,2 -2.94,4.05 -1.90,0.62 -4.76,-1.55 -1.18,-1.62"/>
+  </g>
+</svg>

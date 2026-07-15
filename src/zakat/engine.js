@@ -1,6 +1,10 @@
 import { settingsSig, activeLots, zakatableLots, transactionsSig } from '../state/store.js';
+import { fxRatesSig } from '../state/fx.js';
 import { isLotZakatable, lotValueEGP } from '../models/index.js';
 import { sum, isAged, daysSince, addDays } from '../utils/index.js';
+
+const rates = () => fxRatesSig.value.rates || {};
+const valueEGP = l => lotValueEGP(l, rates());
 
 const ZAKAT_RATE = 0.025;
 
@@ -52,7 +56,7 @@ export function computeFIFO() {
   const skipped = [];
   let agedBase = 0, youngPool = 0;
   for (const l of zakatableLots.value) {
-    const v = lotValueEGP(l);
+    const v = valueEGP(l);
     if (isAged(l.acquiredAt, hawlDays)) {
       agedBase += v;
       contributing.push({ ...l, valueEGP: v });
@@ -83,7 +87,7 @@ export function computePool() {
   const pool = sum(zakatableLots.value.map(lotValueEGP));
   const poolReachesNisab = nisab > 0 && pool >= nisab;
 
-  const contributing = zakatableLots.value.map(l => ({ ...l, valueEGP: lotValueEGP(l) }));
+  const contributing = zakatableLots.value.map(l => ({ ...l, valueEGP: valueEGP(l) }));
 
   if (!anchor) {
     return {

@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Modal, Field } from './ui.jsx';
-import { ACCOUNT_KINDS } from '../models/index.js';
+import { ACCOUNT_KINDS, CURRENCIES } from '../models/index.js';
 import { addAccount, updateAccount } from '../state/store.js';
 
 export function AccountForm({ open, onClose, existing }) {
@@ -39,14 +39,9 @@ export function AccountForm({ open, onClose, existing }) {
         </Field>
       </div>
       <div class="frow">
-        <Field label="العملة" hint="الحسابات بالعملات الأجنبية تُعرض بعملتها؛ التحويل للجنيه المصري ضمن الإعدادات.">
+        <Field label="العملة" hint="الحسابات بالعملات الأجنبية تُقيَّم بالجنيه المصري تلقائياً حسب سعر الصرف في الإعدادات.">
           <select value={form.currency} onChange={patch('currency')}>
-            <option value="EGP">جنيه مصري (EGP)</option>
-            <option value="USD">دولار (USD)</option>
-            <option value="SAR">ريال سعودي (SAR)</option>
-            <option value="EUR">يورو (EUR)</option>
-            <option value="GBP">جنيه استرليني (GBP)</option>
-            <option value="AED">درهم إماراتي (AED)</option>
+            {CURRENCIES.map(c => <option value={c.code}>{c.label} ({c.code})</option>)}
           </select>
         </Field>
       </div>

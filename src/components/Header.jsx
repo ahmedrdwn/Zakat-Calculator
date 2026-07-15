@@ -33,7 +33,7 @@ export function Header() {
     <header class="app-hdr">
       <div class="hdr-inner">
         <a href="#" class="logo" onClick={e => e.preventDefault()}>
-          <span class="logo-icon">☪</span>
+          <img src="/logo.svg" alt="" class="logo-mark" width="38" height="38" />
           <div>
             <div class="logo-title">البنك الشخصي</div>
             <div class="logo-sub">سجل الأصول والزكاة</div>

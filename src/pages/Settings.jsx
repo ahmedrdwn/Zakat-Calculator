@@ -1,9 +1,15 @@
-import { settingsSig, updateSettings } from '../state/store.js';
+import { useState } from 'preact/hooks';
+import { settingsSig, updateSettings, activeAccounts } from '../state/store.js';
+import { fxRatesSig, refreshFxRates } from '../state/fx.js';
+import { CURRENCIES } from '../models/index.js';
+import { fmt, fmtDate } from '../utils/index.js';
 import { wipeAll } from '../data/storage.js';
 import { Banner } from '../components/ui.jsx';
 
 export function Settings() {
   const s = settingsSig.value;
+  const fx = fxRatesSig.value;
+  const [refreshing, setRefreshing] = useState(false);
 
   const set = k => e => {
     const v = e.target.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value;
@@ -11,6 +17,24 @@ export function Settings() {
   };
 
   const nisab = (s.goldPricePerGram || 0) * (s.nisabGoldGrams || 85);
+
+  // Currencies actually used by user's accounts (to show relevant rates)
+  const usedCurrencies = new Set(activeAccounts.value.map(a => a.currency).filter(c => c && c !== 'EGP'));
+  const displayRates = CURRENCIES
+    .filter(c => c.code !== 'EGP' && (usedCurrencies.has(c.code) || ['USD','EUR','GBP','CAD','SAR'].includes(c.code)))
+    .map(c => {
+      const r = fx.rates?.[c.code];
+      const egp = fx.rates?.EGP;
+      // 1 foreign = X EGP
+      const oneUnitInEGP = (r && egp) ? egp / r : null;
+      return { ...c, oneUnitInEGP };
+    });
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    await refreshFxRates();
+    setRefreshing(false);
+  };
 
   return (
     <>
@@ -65,6 +89,44 @@ export function Settings() {
           <Banner tone="info">
             الأسعار تُستخدم لاحتساب النصاب وتقييم أصولك الذهبية والفضية. حدّثها دورياً بحسب السوق.
           </Banner>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <h3><span class="icon">💱</span>أسعار صرف العملات</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            {fx.fetchedAt && <span class="badge badge-muted">آخر تحديث: {fmtDate(fx.fetchedAt)}</span>}
+            <button class="btn btn-ghost btn-sm" disabled={refreshing} onClick={doRefresh}>
+              {refreshing ? '⏳ يحدّث…' : '↻ تحديث'}
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <Banner tone="info">
+            حسابات العملات الأجنبية تُحوَّل تلقائياً إلى الجنيه المصري لاحتساب صافي الثروة والزكاة.
+            الأسعار تُجلب من <code style="color:var(--gold)">exchangerate-api.com</code> — مفتوحة ومجانية وتُحدَّث يومياً.
+          </Banner>
+          {fx.error && <Banner tone="warn">تعذّر جلب الأسعار: {fx.error}. سيتم استخدام آخر أسعار محفوظة.</Banner>}
+          {!fx.fetchedAt && !fx.error && (
+            <Banner tone="warn">لم يتم جلب أسعار الصرف بعد. اضغط «تحديث» لجلبها.</Banner>
+          )}
+          {fx.fetchedAt && displayRates.length > 0 && (
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px">
+              {displayRates.map(c => (
+                <div class="row" style="margin-bottom:0" key={c.code}>
+                  <div class="rmain">
+                    <div class="rname">{c.code} — {c.symbol}</div>
+                    <div class="rmeta">{c.label}</div>
+                  </div>
+                  <div class="rright">
+                    <div class="rval">{c.oneUnitInEGP != null ? fmt(c.oneUnitInEGP) : '—'} ج.م</div>
+                    <div class="rsub">لكل 1 {c.code}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
