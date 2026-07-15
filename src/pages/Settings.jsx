@@ -1,8 +1,10 @@
 import { useState } from 'preact/hooks';
 import { settingsSig, updateSettings, activeAccounts } from '../state/store.js';
 import { fxRatesSig, refreshFxRates } from '../state/fx.js';
+import { metalPricesSig, refreshMetalPrices,
+  goldEGPPerGram, silverEGPPerGram } from '../state/metals.js';
 import { CURRENCIES } from '../models/index.js';
-import { fmt, fmtDate } from '../utils/index.js';
+import { fmt, fmtDate, relArabic } from '../utils/index.js';
 import { wipeAll } from '../data/storage.js';
 import { Banner } from '../components/ui.jsx';
 
@@ -16,7 +18,8 @@ export function Settings() {
     updateSettings({ [k]: v });
   };
 
-  const nisab = (s.goldPricePerGram || 0) * (s.nisabGoldGrams || 85);
+  const nisabPrice = Number(s.goldPricePerGram) || goldEGPPerGram.value || 0;
+  const nisab = nisabPrice * (s.nisabGoldGrams || 85);
 
   // Currencies actually used by user's accounts (to show relevant rates)
   const usedCurrencies = new Set(activeAccounts.value.map(a => a.currency).filter(c => c && c !== 'EGP'));
@@ -32,8 +35,18 @@ export function Settings() {
 
   const doRefresh = async () => {
     setRefreshing(true);
-    await refreshFxRates();
+    await Promise.all([refreshFxRates(), refreshMetalPrices()]);
     setRefreshing(false);
+  };
+
+  const metals = metalPricesSig.value;
+  const goldLive = goldEGPPerGram.value;
+  const silverLive = silverEGPPerGram.value;
+  const [refreshingMetals, setRefreshingMetals] = useState(false);
+  const doRefreshMetals = async () => {
+    setRefreshingMetals(true);
+    await refreshMetalPrices();
+    setRefreshingMetals(false);
   };
 
   return (
@@ -64,18 +77,65 @@ export function Settings() {
       </div>
 
       <div class="card">
+        <div class="card-hd">
+          <h3><span class="icon">🥇</span>أسعار الذهب والفضة اللحظية</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            {metals.fetchedAt && <span class="badge badge-emerald" title={fmtDate(metals.fetchedAt)}>🔴 مباشر · {relArabic(metals.fetchedAt)}</span>}
+            <button class="btn btn-ghost btn-sm" disabled={refreshingMetals} onClick={doRefreshMetals}>
+              {refreshingMetals ? '⏳' : '↻'} تحديث
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <Banner tone="info">
+            السعر اللحظي يُجلب من سوق المعادن العالمي ويُحوَّل إلى الجنيه المصري عبر سعر صرف الدولار. يتحدّث تلقائياً كل ١٥ دقيقة وعند فتح التطبيق.
+          </Banner>
+          {metals.error && !metals.fetchedAt && (
+            <Banner tone="warn">تعذّر جلب أسعار المعادن: {metals.error}. يمكنك إدخال السعر يدوياً أدناه.</Banner>
+          )}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+            <div class="row" style="margin-bottom:0">
+              <div class="rmain">
+                <div class="rname">🥇 جرام ذهب عيار 24</div>
+                <div class="rmeta">${fmt(metals.goldUSDPerOz)} للأونصة</div>
+              </div>
+              <div class="rright">
+                <div class="rval">{goldLive > 0 ? fmt(goldLive) : '—'} ج.م</div>
+                <div class="rsub">لحظي</div>
+              </div>
+            </div>
+            <div class="row" style="margin-bottom:0">
+              <div class="rmain">
+                <div class="rname">🥈 جرام فضة</div>
+                <div class="rmeta">${fmt(metals.silverUSDPerOz)} للأونصة</div>
+              </div>
+              <div class="rright">
+                <div class="rval">{silverLive > 0 ? fmt(silverLive) : '—'} ج.م</div>
+                <div class="rsub">لحظي</div>
+              </div>
+            </div>
+          </div>
+          <p style="font-size:11.5px;color:var(--text-muted);margin-top:12px;text-align:center">
+            هذه أسعار السبك (24 عيار) بدون مصنعية. لعياري 21 أو 22 نُحسب النسبة تلقائياً عند تقييم الأصل.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-hd"><h3><span class="icon">⚖️</span>النصاب والحول</h3>
           {nisab > 0 && <span class="badge badge-gold">النصاب: {nisab.toLocaleString('ar-EG')} ج.م</span>}
         </div>
         <div class="card-body">
           <div class="frow">
             <div class="field">
-              <label>سعر جرام الذهب عيار 24 (ج.م)</label>
-              <div class="iw"><input type="number" step="0.01" value={s.goldPricePerGram || 0} onInput={set('goldPricePerGram')} /><span class="unit">ج.م</span></div>
+              <label>سعر جرام الذهب عيار 24 (يدوي، اختياري)</label>
+              <div class="iw"><input type="number" step="0.01" value={s.goldPricePerGram || 0} onInput={set('goldPricePerGram')} placeholder={goldLive > 0 ? String(Math.round(goldLive)) : '0'} /><span class="unit">ج.م</span></div>
+              <div class="hint">{goldLive > 0 && !s.goldPricePerGram ? `يُستخدم السعر اللحظي: ${fmt(goldLive)} ج.م` : 'اترك 0 لاستخدام السعر اللحظي'}</div>
             </div>
             <div class="field">
-              <label>سعر جرام الفضة (ج.م)</label>
-              <div class="iw"><input type="number" step="0.01" value={s.silverPricePerGram || 0} onInput={set('silverPricePerGram')} /><span class="unit">ج.م</span></div>
+              <label>سعر جرام الفضة (يدوي، اختياري)</label>
+              <div class="iw"><input type="number" step="0.01" value={s.silverPricePerGram || 0} onInput={set('silverPricePerGram')} placeholder={silverLive > 0 ? String(Math.round(silverLive * 100) / 100) : '0'} /><span class="unit">ج.م</span></div>
+              <div class="hint">{silverLive > 0 && !s.silverPricePerGram ? `يُستخدم السعر اللحظي: ${fmt(silverLive)} ج.م` : 'اترك 0 لاستخدام السعر اللحظي'}</div>
             </div>
             <div class="field">
               <label>نصاب الذهب (جرام)</label>
@@ -86,9 +146,6 @@ export function Settings() {
               <input type="number" step="1" value={s.hawlDays || 365} onInput={set('hawlDays')} />
             </div>
           </div>
-          <Banner tone="info">
-            الأسعار تُستخدم لاحتساب النصاب وتقييم أصولك الذهبية والفضية. حدّثها دورياً بحسب السوق.
-          </Banner>
         </div>
       </div>
 
