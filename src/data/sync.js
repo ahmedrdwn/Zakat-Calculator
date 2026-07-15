@@ -17,7 +17,14 @@ function explainError(err) {
   const code = err?.code || '';
   const msg = err?.message || String(err);
   let hint = null;
-  if (code === '42P01' || /relation .* does not exist/i.test(msg) || /user_data/i.test(msg) && /not.*exist/i.test(msg)) {
+  const looksLikeMissingTable =
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    /relation .* does not exist/i.test(msg) ||
+    /Could not find the table/i.test(msg) ||
+    /schema cache/i.test(msg) ||
+    (/user_data/i.test(msg) && /(not|couldn't|could not).*(exist|find)/i.test(msg));
+  if (looksLikeMissingTable) {
     hint = 'جدول user_data غير موجود في مشروع Supabase. شغّل سكربت الإعداد من ملف SUPABASE_SETUP.md لإنشائه.';
   } else if (code === '42501' || /permission denied/i.test(msg) || /row-level security/i.test(msg) || /RLS/i.test(msg)) {
     hint = 'سياسة RLS تمنع الوصول. تأكد من تفعيل RLS وإضافة السياسات الأربع (own_row_read/insert/update/delete) في Supabase.';
