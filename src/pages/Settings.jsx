@@ -7,6 +7,7 @@ import { CURRENCIES } from '../models/index.js';
 import { fmt, fmtDate, relArabic } from '../utils/index.js';
 import { wipeAll } from '../data/storage.js';
 import { Banner } from '../components/ui.jsx';
+import { SharingCard } from '../components/Sharing.jsx';
 
 export function Settings() {
   const s = settingsSig.value;
@@ -186,6 +187,8 @@ export function Settings() {
           )}
         </div>
       </div>
+
+      <SharingCard />
 
       <div class="card">
         <div class="card-hd"><h3><span class="icon">💾</span>البيانات والاسترداد</h3></div>
